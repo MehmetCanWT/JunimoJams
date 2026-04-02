@@ -1,21 +1,25 @@
-## Visual Studio
+# [GENERAL]
 .vs/
-[Bb]in/
-[Oo]bj/
-*.user
-*.userosscache
-*.sln.docstates
-
-## VS Code
 .vscode/
+bin/
+obj/
+*.user
+*.suo
+*.log
+*.tmp
+*.bak
 
-## Stardew Valley Modding
-/bin/
-/obj/
-*.pdb
-*.dll
-*.xml
-!manifest.json
-!config.json
-!assets/
-!i18n/
+# [STARYEW VALLEY]
+.gemini/
+artifacts/
+*.zip
+stats.json
+
+# [C# SERVICE]
+.vsconfig
+.editorconfig
+*.useros
+.DS_Store
+
+# [MACOS]
+.DS_Store
