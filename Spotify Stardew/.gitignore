@@ -1,0 +1,21 @@
+## Visual Studio
+.vs/
+[Bb]in/
+[Oo]bj/
+*.user
+*.userosscache
+*.sln.docstates
+
+## VS Code
+.vscode/
+
+## Stardew Valley Modding
+/bin/
+/obj/
+*.pdb
+*.dll
+*.xml
+!manifest.json
+!config.json
+!assets/
+!i18n/

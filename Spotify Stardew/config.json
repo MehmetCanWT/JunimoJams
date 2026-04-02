@@ -1,0 +1,10 @@
+{
+  "ShowHud": true,
+  "HudPositionX": 20,
+  "HudPositionY": 20,
+  "HudScale": 1.0,
+  "OnlyShowInInventory": false,
+  "Theme": "default",
+  "ShowAlbumArt": true,
+  "ShowPlaybackButtons": false
+}

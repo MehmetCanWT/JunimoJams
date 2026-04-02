@@ -1,0 +1,16 @@
+{
+  "Name": "Spotify Stardew",
+  "Author": "MehmetCanWT",
+  "Version": "0.0.4",
+  "Description": "Adds a HUD element showing the currently playing Spotify song.",
+  "UniqueID": "WT.SpotifyStardew",
+  "EntryDll": "Spotify Stardew.dll",
+  "MinimumApiVersion": "4.0.0",
+  "UpdateKeys": [],
+  "Dependencies": [
+    {
+      "UniqueID": "spacechase0.GenericModConfigMenu",
+      "IsRequired": true
+    }
+  ]
+}
