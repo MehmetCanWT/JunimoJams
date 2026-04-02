@@ -2,7 +2,7 @@
   "Name": "Spotify Valley",
   "Author": "MehmetCanWT",
   "Version": "1.0.0",
-  "Description": "Adds a HUD element showing the currently playing Spotify song.",
+  "Description": "A universal music HUD for Stardew Valley. Supports Spotify, iTunes, Apple Music, and Amazon Music.",
   "UniqueID": "WT.SpotifyValley",
   "EntryDll": "SpotifyValley.dll",
   "MinimumApiVersion": "4.0.0",

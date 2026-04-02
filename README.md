@@ -1,16 +1,18 @@
 # 🌿 Spotify Valley
 
-A premium **Stardew Valley** mod that adds a beautiful, modern HUD overlay showing your currently playing Spotify track. Features high-quality album art fetching and integrated playback controls.
+A premium **Stardew Valley** mod that adds a beautiful, modern HUD overlay for your music. While the name says Spotify, it's actually a **Universal Media Hub** that supports almost every popular player!
 
 ![Spotify Valley HUD](https://raw.githubusercontent.com/MehmetCanWT/SpotifyValley/main/assets/preview.png) *(Preview placeholder)*
 
 ## ✨ Features
-- 🎵 **Real-time HUD**: Shows song title, artist, and progress.
-- 🖼️ **Album Art**: Automatically fetches high-resolution covers via iTunes API.
+- 🎵 **Universal Media Support**: Automatic support for **Spotify**, **iTunes**, **Apple Music** (Desktop), and **Amazon Music**.
+- 🖼️ **Smarter Album Art**: Uses similarity scoring to find the most accurate high-res covers via iTunes API.
+- 🔠 **Multi-Language Fix**: Built-in character normalization ensures Turkish, Russian, and other special characters are readable even with standard game fonts.
 - 🎮 **Integrated Controls**: Play/Pause, Next, and Previous track buttons directly in your game HUD.
-- 🎨 **Theming System**: Support for custom themes in the `assets/` folder.
+- 🎨 **Premium Visuals**: Sleek "Glassmorphism" style HUD with Stardew Valley-themed frames.
 - ⚙️ **Fully Customizable**: Adjust position, scale, and visibility via **Generic Mod Config Menu**.
 - 🐧 **Cross-Platform**: Full support for Windows, macOS, and Linux.
+- 📁 **Smart Cache**: Saves downloaded covers locally to ensure instant loading for your favorite tracks.
 
 ## 📥 Installation
 1. Install the latest version of [SMAPI](https://smapi.io/).
@@ -41,4 +43,4 @@ Built with **C#** and **SMAPI SDK**.
 - Icons and HUD design by **Antigravity AI**
 
 ---
-*Stardew Valley is a trademark of ConcernedApe LLC. This mod is not affiliated with ConcernedApe or Spotify.*
+*Stardew Valley is a trademark of ConcernedApe LLC. This mod is not affiliated with ConcernedApe, Spotify, or Apple.*
