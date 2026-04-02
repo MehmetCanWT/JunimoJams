@@ -1,2 +1,27 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+# [GENERAL]
+.vs/
+.vscode/
+bin/
+obj/
+*.user
+*.suo
+*.log
+*.tmp
+*.bak
+
+# [STARYEW VALLEY]
+.gemini/
+artifacts/
+*.zip
+stats.json
+
+# [C# SERVICE]
+.vsconfig
+.editorconfig
+*.useros
+.DS_Store
+
+# [MACOS]
+.DS_Store
