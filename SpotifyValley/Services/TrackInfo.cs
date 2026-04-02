@@ -1,7 +1,7 @@
 using System;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace Spotify_Stardew.Services
+namespace SpotifyValley.Services
 {
     public class TrackInfo : IDisposable
     {

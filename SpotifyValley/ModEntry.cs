@@ -4,14 +4,14 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Xna.Framework.Graphics;
-using Spotify_Stardew.Services;
-using Spotify_Stardew.UI;
+using SpotifyValley.Services;
+using SpotifyValley.UI;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Menus;
 
-namespace Spotify_Stardew
+namespace SpotifyValley
 {
     public class ModEntry : Mod
     {
@@ -37,9 +37,9 @@ namespace Spotify_Stardew
             try
             {
                 this._musicService = new MusicService();
-                this._artService = new ArtService();
+                this._artService = new ArtService(base.Helper.DirectoryPath);
                 this._overlay = new MusicOverlay(this.Config, base.Helper);
-                base.Monitor.Log("Spotify Stardew Initialized (Native + Cover Art).", LogLevel.Info);
+                base.Monitor.Log("Spotify Valley Initialized (SMTC + Cover Art Cache).", LogLevel.Info);
             }
             catch (Exception ex)
             {

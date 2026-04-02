@@ -1,10 +1,10 @@
 {
-  "Name": "Spotify Stardew",
+  "Name": "Spotify Valley",
   "Author": "MehmetCanWT",
-  "Version": "0.0.4",
+  "Version": "1.0.0",
   "Description": "Adds a HUD element showing the currently playing Spotify song.",
-  "UniqueID": "WT.SpotifyStardew",
-  "EntryDll": "Spotify Stardew.dll",
+  "UniqueID": "WT.SpotifyValley",
+  "EntryDll": "SpotifyValley.dll",
   "MinimumApiVersion": "4.0.0",
   "UpdateKeys": [],
   "Dependencies": [

@@ -1,4 +1,4 @@
-namespace Spotify_Stardew
+namespace SpotifyValley
 {
     public class ModConfig
     {

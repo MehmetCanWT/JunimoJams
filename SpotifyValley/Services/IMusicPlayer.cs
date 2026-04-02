@@ -1,4 +1,4 @@
-namespace Spotify_Stardew.Services
+namespace SpotifyValley.Services
 {
     public interface IMusicPlayer
     {

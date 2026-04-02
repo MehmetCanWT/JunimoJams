@@ -1,8 +1,8 @@
 using System;
 using System.Runtime.InteropServices;
-using Spotify_Stardew.Services.Platform;
+using SpotifyValley.Services.Platform;
 
-namespace Spotify_Stardew.Services
+namespace SpotifyValley.Services
 {
     public class MusicService
     {

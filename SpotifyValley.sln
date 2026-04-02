@@ -1,7 +1,7 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Spotify Stardew", "Spotify Stardew\Spotify Stardew.csproj", "{BBA9650C-84BA-41E8-86D1-562C4C92C763}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpotifyValley", "SpotifyValley\SpotifyValley.csproj", "{BBA9650C-84BA-41E8-86D1-562C4C92C763}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

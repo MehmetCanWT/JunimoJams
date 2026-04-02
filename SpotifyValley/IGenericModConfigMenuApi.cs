@@ -1,7 +1,7 @@
 using System;
 using StardewModdingAPI;
 
-namespace Spotify_Stardew
+namespace SpotifyValley
 {
     public interface IGenericModConfigMenuApi
     {

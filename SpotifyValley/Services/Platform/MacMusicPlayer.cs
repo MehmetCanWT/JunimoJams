@@ -1,32 +1,27 @@
 using System;
 using System.Diagnostics;
 
-namespace Spotify_Stardew.Services.Platform
+namespace SpotifyValley.Services.Platform
 {
     public class MacMusicPlayer : IMusicPlayer
     {
         public bool IsSpotifyRunning()
         {
-            string output = this.RunAppleScript("application \"Spotify\" is running");
-            return output.Trim().ToLower() == "true";
+            return this.GetActiveApp() != null;
         }
 
         public TrackInfo GetCurrentTrack()
         {
-            if (!this.IsSpotifyRunning())
+            string app = this.GetActiveApp();
+            if (app == null)
             {
-                return new TrackInfo
-                {
-                    Name = "Not Running",
-                    Artist = "",
-                    IsPlaying = false
-                };
+                return new TrackInfo { Name = "Not Running", Artist = "Music Player", IsPlaying = false };
             }
 
-            string state = this.RunAppleScript("tell application \"Spotify\" to player state as string");
+            string state = this.RunAppleScript($"tell application \"{app}\" to player state as string");
             bool isPlaying = state.Trim().ToLower() == "playing";
-            string artist = this.RunAppleScript("tell application \"Spotify\" to artist of current track as string");
-            string name = this.RunAppleScript("tell application \"Spotify\" to name of current track as string");
+            string artist = this.RunAppleScript($"tell application \"{app}\" to artist of current track as string");
+            string name = this.RunAppleScript($"tell application \"{app}\" to name of current track as string");
 
             return new TrackInfo
             {
@@ -36,11 +31,33 @@ namespace Spotify_Stardew.Services.Platform
             };
         }
 
-        public void NextTrack() => this.RunAppleScript("tell application \"Spotify\" to next track");
+        public void NextTrack() => this.RunActiveAppCommand("next track");
 
-        public void PreviousTrack() => this.RunAppleScript("tell application \"Spotify\" to previous track");
+        public void PreviousTrack() => this.RunActiveAppCommand("previous track");
 
-        public void TogglePlayPause() => this.RunAppleScript("tell application \"Spotify\" to playpause");
+        public void TogglePlayPause() => this.RunActiveAppCommand("playpause");
+
+        private string GetActiveApp()
+        {
+            if (this.IsAppRunning("Spotify")) return "Spotify";
+            if (this.IsAppRunning("Music")) return "Music";
+            return null;
+        }
+
+        private bool IsAppRunning(string appName)
+        {
+            string output = this.RunAppleScript($"application \"{appName}\" is running");
+            return output.Trim().ToLower() == "true";
+        }
+
+        private void RunActiveAppCommand(string command)
+        {
+            string app = this.GetActiveApp();
+            if (app != null)
+            {
+                this.RunAppleScript($"tell application \"{app}\" to {command}");
+            }
+        }
 
         private string RunAppleScript(string script)
         {

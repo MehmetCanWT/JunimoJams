@@ -2,29 +2,25 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 
-namespace Spotify_Stardew.Services.Platform
+namespace SpotifyValley.Services.Platform
 {
     public class LinuxMusicPlayer : IMusicPlayer
     {
         public bool IsSpotifyRunning()
         {
-            return Process.GetProcessesByName("spotify").Any();
+            return this.GetActivePlayer() != null;
         }
 
         public TrackInfo GetCurrentTrack()
         {
-            if (!this.IsSpotifyRunning())
+            string player = this.GetActivePlayer();
+            if (player == null)
             {
-                return new TrackInfo
-                {
-                    Name = "Not Running",
-                    Artist = "",
-                    IsPlaying = false
-                };
+                return new TrackInfo { Name = "Not Running", Artist = "Music Player", IsPlaying = false };
             }
 
-            string metadata = this.RunShellCommand("dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.freedesktop.DBus.Properties.Get string:'org.mpris.MediaPlayer2.Player' string:'Metadata'");
-            string status = this.RunShellCommand("dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.freedesktop.DBus.Properties.Get string:'org.mpris.MediaPlayer2.Player' string:'PlaybackStatus'");
+            string metadata = this.RunPlayerCommand(player, "org.freedesktop.DBus.Properties.Get string:'org.mpris.MediaPlayer2.Player' string:'Metadata'");
+            string status = this.RunPlayerCommand(player, "org.freedesktop.DBus.Properties.Get string:'org.mpris.MediaPlayer2.Player' string:'PlaybackStatus'");
             
             bool isPlaying = status.Contains("Playing");
             string artist = this.ParseDbusMetadata(metadata, "xesam:artist");
@@ -38,15 +34,50 @@ namespace Spotify_Stardew.Services.Platform
             };
         }
 
-        public void NextTrack() => this.SendDbusMethod("Next");
+        public void NextTrack() => this.SendPlayerMethod("Next");
 
-        public void PreviousTrack() => this.SendDbusMethod("Previous");
+        public void PreviousTrack() => this.SendPlayerMethod("Previous");
 
-        public void TogglePlayPause() => this.SendDbusMethod("PlayPause");
+        public void TogglePlayPause() => this.SendPlayerMethod("PlayPause");
 
-        private void SendDbusMethod(string method)
+        private string GetActivePlayer()
         {
-            this.RunShellCommand($"dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.{method}");
+            string names = this.RunShellCommand("dbus-send --print-reply --dest=org.freedesktop.DBus /org.freedesktop.DBus org.freedesktop.DBus.ListNames");
+            string[] lines = names.Split('\n');
+            
+            // Priority list
+            string[] players = { "spotify", "google-play-music", "clementine", "vlc", "rhythmbox" };
+            
+            foreach (var p in players)
+            {
+                if (lines.Any(l => l.Contains($"org.mpris.MediaPlayer2.{p}")))
+                    return $"org.mpris.MediaPlayer2.{p}";
+            }
+
+            // Fallback to first MPRIS2 player found
+            var fallback = lines.FirstOrDefault(l => l.Contains("org.mpris.MediaPlayer2."));
+            if (fallback != null)
+            {
+                int quoteStart = fallback.IndexOf("\"") + 1;
+                int quoteEnd = fallback.LastIndexOf("\"");
+                return fallback.Substring(quoteStart, quoteEnd - quoteStart);
+            }
+
+            return null;
+        }
+
+        private void SendPlayerMethod(string method)
+        {
+            string player = this.GetActivePlayer();
+            if (player != null)
+            {
+                this.RunShellCommand($"dbus-send --print-reply --dest={player} /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.{method}");
+            }
+        }
+
+        private string RunPlayerCommand(string dest, string command)
+        {
+            return this.RunShellCommand($"dbus-send --print-reply --dest={dest} /org/mpris/MediaPlayer2 {command}");
         }
 
         private string RunShellCommand(string args)
