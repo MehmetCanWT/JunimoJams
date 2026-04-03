@@ -2,8 +2,6 @@
 
 A premium **Stardew Valley** mod that adds a beautiful, modern HUD overlay for your music. While the name says Spotify, it's actually a **Universal Media Hub** that supports almost every popular player!
 
-![Spotify Valley HUD](https://raw.githubusercontent.com/MehmetCanWT/SpotifyValley/main/assets/preview.png) *(Preview placeholder)*
-
 ## ✨ Features
 - 🎵 **Universal Media Support**: Automatic support for **Spotify**, **iTunes**, **Apple Music** (Desktop), and **Amazon Music**.
 - 🖼️ **Smarter Album Art**: Uses similarity scoring to find the most accurate high-res covers via iTunes API.
