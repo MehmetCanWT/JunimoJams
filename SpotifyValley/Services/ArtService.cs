@@ -1,12 +1,10 @@
 using System;
-using System.Collections.Generic;
+using System.IO;
 using System.Net.Http;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-using System.IO;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace SpotifyValley.Services
 {
@@ -15,19 +13,16 @@ namespace SpotifyValley.Services
         private readonly HttpClient _http;
         private readonly string _cachePath;
         private string _lastSearchQuery = "";
-        private byte[] _lastResultBytes = null;
+        private byte[] _lastResultBytes;
 
         public ArtService(string modPath)
         {
             this._http = new HttpClient();
             this._http.Timeout = TimeSpan.FromSeconds(5.0);
             this._http.DefaultRequestHeaders.Add("User-Agent", "SpotifyValley/1.0");
-            
+
             this._cachePath = Path.Combine(modPath, "cache");
-            if (!Directory.Exists(this._cachePath))
-            {
-                Directory.CreateDirectory(this._cachePath);
-            }
+            Directory.CreateDirectory(this._cachePath);
         }
 
         public async Task<byte[]> FetchCoverArtBytes(string artist, string trackName)
@@ -44,7 +39,7 @@ namespace SpotifyValley.Services
             if (this._lastSearchQuery == queryKey && this._lastResultBytes != null)
                 return this._lastResultBytes;
 
-            // Check Cache
+            // Check local cache first
             byte[] cached = this.GetFromCache(queryKey);
             if (cached != null)
             {
@@ -58,10 +53,10 @@ namespace SpotifyValley.Services
                 string term = $"{artist} {cleanTrackName}";
                 string url = $"https://itunes.apple.com/search?term={Uri.EscapeDataString(term)}&entity=song&limit=10";
                 string response = await this._http.GetStringAsync(url);
-                
+
                 JObject json = JObject.Parse(response);
                 JArray results = json["results"] as JArray;
-                
+
                 if (results == null || results.Count == 0)
                     return null;
 
@@ -72,10 +67,10 @@ namespace SpotifyValley.Services
                 {
                     string foundArtist = result["artistName"]?.ToString() ?? "";
                     string foundTitle = result["trackName"]?.ToString() ?? "";
-                    
+
                     double score = this.CalculateMatchScore(artist, cleanTrackName, foundArtist, foundTitle);
-                    
-                    if (score > bestScore && score > 0.5) // Minimum threshold
+
+                    if (score > bestScore && score > 0.5)
                     {
                         string art = result["artworkUrl100"]?.ToString();
                         if (!string.IsNullOrEmpty(art))
@@ -92,10 +87,8 @@ namespace SpotifyValley.Services
                 byte[] imageBytes = await this._http.GetByteArrayAsync(bestArtUrl);
                 this._lastSearchQuery = queryKey;
                 this._lastResultBytes = imageBytes;
-                
-                // Save to cache
                 this.SaveToCache(queryKey, imageBytes);
-                
+
                 return imageBytes;
             }
             catch
@@ -108,38 +101,26 @@ namespace SpotifyValley.Services
         {
             try
             {
-                string fileName = this.GetHashString(key) + ".png";
-                string fullPath = Path.Combine(this._cachePath, fileName);
-                if (File.Exists(fullPath))
-                {
-                    return File.ReadAllBytes(fullPath);
-                }
+                string fullPath = Path.Combine(this._cachePath, this.GetCacheFileName(key));
+                return File.Exists(fullPath) ? File.ReadAllBytes(fullPath) : null;
             }
-            catch { }
-            return null;
+            catch { return null; }
         }
 
         private void SaveToCache(string key, byte[] bytes)
         {
             try
             {
-                string fileName = this.GetHashString(key) + ".png";
-                string fullPath = Path.Combine(this._cachePath, fileName);
-                File.WriteAllBytes(fullPath, bytes);
+                File.WriteAllBytes(Path.Combine(this._cachePath, this.GetCacheFileName(key)), bytes);
             }
             catch { }
         }
 
-        private string GetHashString(string inputString)
+        private string GetCacheFileName(string key)
         {
-            using (HashAlgorithm algorithm = MD5.Create())
-            {
-                byte[] bytes = algorithm.ComputeHash(Encoding.UTF8.GetBytes(inputString));
-                StringBuilder sb = new StringBuilder();
-                foreach (byte b in bytes)
-                    sb.Append(b.ToString("X2"));
-                return sb.ToString();
-            }
+            // Use MD5 hash as a stable, short filename
+            byte[] hash = System.Security.Cryptography.MD5.HashData(Encoding.UTF8.GetBytes(key));
+            return Convert.ToHexString(hash) + ".png";
         }
 
         private string CleanTitle(string title)
@@ -147,33 +128,27 @@ namespace SpotifyValley.Services
             if (string.IsNullOrEmpty(title))
                 return title;
 
-            // Remove common music tags that break search
             string[] tags = { " - Remastered", " - Remaster", " (Remastered)", " (Remaster)", " - Live", " (Live)", " - Radio Edit", "(feat. ", "feat. " };
             foreach (string tag in tags)
             {
                 int index = title.IndexOf(tag, StringComparison.OrdinalIgnoreCase);
                 if (index > 0)
-                {
                     title = title.Substring(0, index);
-                }
             }
 
             int dashIndex = title.IndexOf(" - ");
             if (dashIndex > 0)
-            {
                 title = title.Substring(0, dashIndex);
-            }
-            
-            title = Regex.Replace(title, @"\s*[\(\[].*?[\)\]]", "");
-            return title.Trim();
+
+            return Regex.Replace(title, @"\s*[\(\[].*?[\)\]]", "").Trim();
         }
 
         private double CalculateMatchScore(string targetArtist, string targetTitle, string foundArtist, string foundTitle)
         {
             double artistScore = this.GetStringSimilarity(targetArtist, foundArtist);
             double titleScore = this.GetStringSimilarity(targetTitle, foundTitle);
-            
-            // Weight artist higher for general searches, or average them
+
+            // Title is weighted slightly higher as artist names can be generic
             return (artistScore * 0.4) + (titleScore * 0.6);
         }
 
@@ -185,13 +160,7 @@ namespace SpotifyValley.Services
 
             if (s == t) return 1.0;
             if (s.Contains(t) || t.Contains(s)) return 0.8;
-            
-            return 0; // Low similarity
-        }
-
-        private bool IsFuzzyMatch(string query, string result)
-        {
-            return this.GetStringSimilarity(query, result) > 0.7;
+            return 0;
         }
     }
 }

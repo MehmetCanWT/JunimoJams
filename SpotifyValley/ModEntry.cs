@@ -39,7 +39,7 @@ namespace SpotifyValley
                 this._musicService = new MusicService();
                 this._artService = new ArtService(base.Helper.DirectoryPath);
                 this._overlay = new MusicOverlay(this.Config, base.Helper);
-                base.Monitor.Log("Spotify Valley Initialized (SMTC + Cover Art Cache).", LogLevel.Info);
+                base.Monitor.Log("Spotify Valley Initialized.", LogLevel.Info);
             }
             catch (Exception ex)
             {

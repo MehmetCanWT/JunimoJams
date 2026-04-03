@@ -1,12 +1,12 @@
 {
   "Name": "Spotify Valley",
   "Author": "MehmetCanWT",
-  "Version": "1.0.0",
+  "Version": "5.0.1",
   "Description": "A universal music HUD for Stardew Valley. Supports Spotify, iTunes, Apple Music, and Amazon Music.",
   "UniqueID": "WT.SpotifyValley",
   "EntryDll": "SpotifyValley.dll",
   "MinimumApiVersion": "4.0.0",
-  "UpdateKeys": [],
+  "UpdateKeys": [ "Nexus:38791" ],
   "Dependencies": [
     {
       "UniqueID": "spacechase0.GenericModConfigMenu",
