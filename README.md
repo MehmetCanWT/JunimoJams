@@ -38,7 +38,6 @@ Built with **C#** and **SMAPI SDK**.
 ## 📜 Credits
 - Created by **MehmetCanWT**
 - Powered by **SMAPI**
-- Icons and HUD design by **Antigravity AI**
 
 ---
 *Stardew Valley is a trademark of ConcernedApe LLC. This mod is not affiliated with ConcernedApe, Spotify, or Apple.*
