@@ -1,8 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace SpotifyValley.Services.Platform
 {
@@ -17,7 +17,36 @@ namespace SpotifyValley.Services.Platform
         private const uint KEYEVENTF_EXTENDEDKEY = 1;
         private const uint KEYEVENTF_KEYUP = 2;
 
-        private readonly string[] _playerProcessNames = { "Spotify", "iTunes", "AppleMusic", "Amazon Music" };
+        private readonly string[] _playerProcessNames;
+
+        // Known idle window titles — when the player is open but not actively playing a track
+        private static readonly HashSet<string> IdleTitles = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Spotify", "Spotify Premium", "Spotify Free",
+            "iTunes",
+            "Amazon Music",
+            "Apple Music", "AppleMusic",
+            "Cider", "Cider (Preview)"
+        };
+
+        public WindowsMusicPlayer(string[] extraPlayers = null)
+        {
+            // Built-in players + any user-configured extras from config.json
+            var players = new List<string> { "Spotify", "iTunes", "AppleMusic", "Amazon Music", "Cider" };
+            if (extraPlayers != null && extraPlayers.Length > 0)
+            {
+                foreach (string p in extraPlayers)
+                {
+                    if (!string.IsNullOrWhiteSpace(p) && !players.Contains(p, StringComparer.OrdinalIgnoreCase))
+                    {
+                        players.Add(p.Trim());
+                        // Also register the extra player name as an idle title
+                        IdleTitles.Add(p.Trim());
+                    }
+                }
+            }
+            this._playerProcessNames = players.ToArray();
+        }
 
         public bool IsSpotifyRunning()
         {
@@ -35,15 +64,18 @@ namespace SpotifyValley.Services.Platform
                 string title = process.MainWindowTitle;
                 string processName = process.ProcessName;
 
-                // Basic "Idle" titles
-                if (title == "Spotify" || title == "Spotify Premium" || title == "Spotify Free" || title == "iTunes" || title == "Amazon Music")
+                // Check if the player is idle (open but not playing)
+                if (IdleTitles.Contains(title))
                 {
                     return new TrackInfo { Name = "Paused / Idle", Artist = processName, IsPlaying = false };
                 }
 
-                // Apple Music Window Title usually: "Song Title — Artist" (Note the em-dash or en-dash)
-                // Spotify: "Artist - Song Title"
-                // Amazon: "Song Title - Artist"
+                // Parse window title to extract artist and track name.
+                // Different players use different separator formats:
+                //   Spotify:       "Artist - Song"
+                //   iTunes/Cider:  "Song - Artist"  (also em-dash / en-dash variants)
+                //   Apple Music:   "Song — Artist"
+                //   Amazon Music:  "Song - Artist"
                 string[] separators = { " - ", " — ", " – " };
                 
                 foreach (var sep in separators)
@@ -52,12 +84,12 @@ namespace SpotifyValley.Services.Platform
                     {
                         string[] parts = title.Split(new[] { sep }, 2, StringSplitOptions.None);
                         
-                        // Heuristic for player-specific order
+                        // Spotify uses "Artist - Song", everyone else uses "Song - Artist"
                         if (processName == "Spotify")
                         {
                             return new TrackInfo { Artist = parts[0].Trim(), Name = parts[1].Trim(), IsPlaying = true };
                         }
-                        else // iTunes/Amazon often flip it or keep it as Title - Artist
+                        else
                         {
                              return new TrackInfo { Name = parts[0].Trim(), Artist = parts[1].Trim(), IsPlaying = true };
                         }
@@ -93,3 +125,4 @@ namespace SpotifyValley.Services.Platform
         }
     }
 }
+

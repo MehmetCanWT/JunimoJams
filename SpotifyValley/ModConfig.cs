@@ -10,5 +10,12 @@ namespace SpotifyValley
         public string Theme { get; set; } = "default";
         public bool ShowAlbumArt { get; set; } = true;
         public bool ShowPlaybackButtons { get; set; } = true;
+
+        /// <summary>
+        /// Additional music player process names to detect.
+        /// Built-in: Spotify, iTunes, AppleMusic, Amazon Music, Cider.
+        /// Add your own custom player here (e.g. "Tidal", "Deezer", "foobar2000").
+        /// </summary>
+        public string[] ExtraPlayers { get; set; } = System.Array.Empty<string>();
     }
 }

@@ -1,0 +1,98 @@
+name: Build & Release to Nexus Mods
+
+on:
+  push:
+    tags:
+      - "v*"        # Trigger on version tags like v5.1.0
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  MOD_NAME: SpotifyValley
+  DOTNET_VERSION: "6.0.x"
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # Needed for creating GitHub Releases
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Setup .NET ───────────────────────────────────────────────
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # ── Restore & Build ──────────────────────────────────────────
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build --configuration Release --no-restore
+
+      # ── Extract Version from manifest.json ───────────────────────
+      - name: Extract mod version
+        id: version
+        run: |
+          VERSION=$(jq -r '.Version' SpotifyValley/manifest.json)
+          echo "MOD_VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected mod version: $VERSION"
+
+      # ── Package Mod ──────────────────────────────────────────────
+      # SMAPI ModBuildConfig already generates a zip at bin/Release/
+      # but we also create a clean zip for maximum compatibility
+      - name: Package mod
+        run: |
+          RELEASE_DIR="SpotifyValley/bin/Release"
+          ZIP_NAME="${{ env.MOD_NAME }} ${{ steps.version.outputs.MOD_VERSION }}.zip"
+
+          # If SMAPI build package already created the zip, use it
+          if [ -f "$RELEASE_DIR/$ZIP_NAME" ]; then
+            cp "$RELEASE_DIR/$ZIP_NAME" "./$ZIP_NAME"
+          else
+            # Manually zip the mod files
+            cd "$RELEASE_DIR/${{ env.MOD_NAME }}"
+            zip -r "../../../$ZIP_NAME" .
+            cd ../../..
+          fi
+
+          echo "ZIP_PATH=$ZIP_NAME" >> $GITHUB_ENV
+          echo "Created release zip: $ZIP_NAME"
+
+      # ── Create GitHub Release ────────────────────────────────────
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZIP_PATH }}
+          generate_release_notes: true
+          name: "v${{ steps.version.outputs.MOD_VERSION }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Upload to Nexus Mods ─────────────────────────────────────
+      # Uses the official Nexus Mods upload action (v3 API)
+      # Required secrets:
+      #   NEXUS_API_KEY    - Your Nexus Mods API key (Settings > API keys)
+      #   NEXUS_FILE_GROUP - File group ID for your mod
+      #
+      # To find the file_group_id:
+      #   1. Go to your mod page on Nexus Mods
+      #   2. Click "Manage Files"
+      #   3. The group ID is in the URL or API response
+      - name: Upload to Nexus Mods
+        if: startsWith(github.ref, 'refs/tags/') && vars.NEXUS_UPLOAD_ENABLED == 'true'
+        uses: Nexus-Mods/upload-action@v1
+        with:
+          api_key: ${{ secrets.NEXUS_API_KEY }}
+          file_group_id: ${{ secrets.NEXUS_FILE_GROUP }}
+          filename: ${{ env.ZIP_PATH }}
+          version: ${{ steps.version.outputs.MOD_VERSION }}
+          display_name: "Spotify Valley v${{ steps.version.outputs.MOD_VERSION }}"
+          description: "Universal music HUD for Stardew Valley"
+          file_category: main
+          archive_existing_file: true

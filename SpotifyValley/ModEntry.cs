@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Xna.Framework.Graphics;
 using SpotifyValley.Services;
@@ -22,7 +23,6 @@ namespace SpotifyValley
         
         private TrackInfo _currentTrack = new TrackInfo();
         private string _lastArtKey = "";
-        private bool _isFetchingArt = false;
         
         private int _checkInterval = 60;
         private int _checkTimer = 0;
@@ -31,12 +31,16 @@ namespace SpotifyValley
         private string _pendingArtTrackKey = "";
         private readonly object _artLock = new object();
 
+        // Cancellation support for album art fetching — cancels the previous
+        // download when the user skips to the next track before it finishes.
+        private CancellationTokenSource _artCts;
+
         public override void Entry(IModHelper helper)
         {
             this.Config = helper.ReadConfig<ModConfig>();
             try
             {
-                this._musicService = new MusicService();
+                this._musicService = new MusicService(this.Config.ExtraPlayers);
                 this._artService = new ArtService(base.Helper.DirectoryPath);
                 this._overlay = new MusicOverlay(this.Config, base.Helper);
                 base.Monitor.Log("Spotify Valley Initialized.", LogLevel.Info);
@@ -48,7 +52,9 @@ namespace SpotifyValley
 
             helper.Events.GameLoop.GameLaunched += this.OnGameLaunched;
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
+            helper.Events.GameLoop.ReturnedToTitle += this.OnReturnedToTitle;
             helper.Events.Display.RenderingHud += this.OnRenderingHud;
+            helper.Events.Display.RenderedActiveMenu += this.OnRenderedActiveMenu;
             helper.Events.Input.ButtonPressed += this.OnButtonPressed;
         }
 
@@ -136,7 +142,7 @@ namespace SpotifyValley
 
         private void FetchAlbumArt(TrackInfo track)
         {
-            if (this._artService == null || this._isFetchingArt)
+            if (this._artService == null)
                 return;
 
             if (track.Name == "Unknown" || track.Name == "Not Running")
@@ -146,14 +152,19 @@ namespace SpotifyValley
             if (key == this._lastArtKey)
                 return;
 
-            this._isFetchingArt = true;
+            // Cancel any in-flight download from the previous track
+            this._artCts?.Cancel();
+            this._artCts?.Dispose();
+            this._artCts = new CancellationTokenSource();
+            var token = this._artCts.Token;
+
             this._lastArtKey = key;
 
             Task.Run(async () =>
             {
                 try
                 {
-                    byte[] imageBytes = await this._artService.FetchCoverArtBytes(track.Artist, track.Name);
+                    byte[] imageBytes = await this._artService.FetchCoverArtBytes(track.Artist, track.Name, token);
                     if (imageBytes != null && imageBytes.Length != 0)
                     {
                         lock (this._artLock)
@@ -163,20 +174,24 @@ namespace SpotifyValley
                         }
                     }
                 }
+                catch (OperationCanceledException)
+                {
+                    // Expected when skipping tracks rapidly — do nothing
+                }
                 catch
                 {
-                    // Ignore errors
+                    // Ignore other errors
                 }
-                finally
-                {
-                    this._isFetchingArt = false;
-                }
-            });
+            }, token);
         }
 
-        private void OnRenderingHud(object sender, RenderingHudEventArgs e)
+        /// <summary>
+        /// Processes pending album art bytes (downloaded on a background thread)
+        /// and converts them into a Texture2D on the main graphics thread.
+        /// This must be called from a rendering event to access the GraphicsDevice safely.
+        /// </summary>
+        private void ProcessPendingArt()
         {
-            // Handle pending art bytes from background task
             byte[] artToLoad = null;
             string artKey = null;
 
@@ -210,13 +225,56 @@ namespace SpotifyValley
                     base.Monitor.Log("Texture load error: " + ex.Message, LogLevel.Trace);
                 }
             }
+        }
+
+        /// <summary>
+        /// Draws the HUD when no active menu is open (normal gameplay).
+        /// When a menu IS open, rendering is deferred to OnRenderedActiveMenu
+        /// so the HUD appears above the menu's shadow overlay.
+        /// </summary>
+        private void OnRenderingHud(object sender, RenderingHudEventArgs e)
+        {
+            this.ProcessPendingArt();
 
             if (!this.IsHudVisible())
                 return;
 
+            // Only draw here when there is no active menu.
+            // When a menu is open, OnRenderedActiveMenu handles drawing
+            // so the HUD appears above the menu shadow.
+            if (Game1.activeClickableMenu != null)
+                return;
+
+            this.DrawOverlay(e.SpriteBatch);
+        }
+
+        /// <summary>
+        /// Draws the HUD after the active menu has been rendered, placing it
+        /// on top of the menu and its shadow overlay. This fixes the user-reported
+        /// issue where the HUD was darkened/covered when "Only In Menu" was enabled.
+        /// </summary>
+        private void OnRenderedActiveMenu(object sender, RenderedActiveMenuEventArgs e)
+        {
+            this.ProcessPendingArt();
+
+            if (!this.IsHudVisible())
+                return;
+
+            // Only draw here when a menu is open
+            if (Game1.activeClickableMenu == null)
+                return;
+
+            this.DrawOverlay(e.SpriteBatch);
+        }
+
+        /// <summary>
+        /// Shared draw logic used by both OnRenderingHud and OnRenderedActiveMenu.
+        /// </summary>
+        private void DrawOverlay(SpriteBatch spriteBatch)
+        {
             if (this._currentTrack.Name != "Unknown" && this._currentTrack.Name != "Not Running")
             {
-                this._overlay?.Draw(e.SpriteBatch, this._currentTrack);
+                this._overlay?.Draw(spriteBatch, this._currentTrack);
             }
         }
 
@@ -253,6 +311,27 @@ namespace SpotifyValley
                 return false;
 
             return !this.Config.OnlyShowInInventory || Game1.activeClickableMenu is GameMenu;
+        }
+
+        /// <summary>
+        /// Cleanup resources when returning to the title screen to prevent
+        /// texture memory leaks across save file changes.
+        /// </summary>
+        private void OnReturnedToTitle(object sender, ReturnedToTitleEventArgs e)
+        {
+            this._artCts?.Cancel();
+            this._artCts?.Dispose();
+            this._artCts = null;
+
+            this._currentTrack?.Dispose();
+            this._currentTrack = new TrackInfo();
+            this._lastArtKey = "";
+
+            lock (this._artLock)
+            {
+                this._pendingArtBytes = null;
+                this._pendingArtTrackKey = "";
+            }
         }
     }
 }

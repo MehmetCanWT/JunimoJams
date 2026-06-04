@@ -9,7 +9,7 @@ using StardewValley.Menus;
 
 namespace SpotifyValley.UI
 {
-    public class MusicOverlay
+    public class MusicOverlay : IDisposable
     {
         private readonly ModConfig _config;
         private readonly IModHelper _helper;
@@ -461,6 +461,27 @@ namespace SpotifyValley.UI
                     return t + ellipsis;
             }
             return "...";
+        }
+
+        public void Dispose()
+        {
+            this._backgroundTexture?.Dispose();
+            this._buttonsTexture?.Dispose();
+            this._buttonBgTexture?.Dispose();
+            this._btnPlayTexture?.Dispose();
+            this._btnPauseTexture?.Dispose();
+            this._btnNextTexture?.Dispose();
+            this._btnPrevTexture?.Dispose();
+            this._roundedArtCache?.Dispose();
+
+            this._backgroundTexture = null;
+            this._buttonsTexture = null;
+            this._buttonBgTexture = null;
+            this._btnPlayTexture = null;
+            this._btnPauseTexture = null;
+            this._btnNextTexture = null;
+            this._btnPrevTexture = null;
+            this._roundedArtCache = null;
         }
     }
 }

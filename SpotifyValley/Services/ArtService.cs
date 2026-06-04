@@ -3,6 +3,7 @@ using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
@@ -25,7 +26,7 @@ namespace SpotifyValley.Services
             Directory.CreateDirectory(this._cachePath);
         }
 
-        public async Task<byte[]> FetchCoverArtBytes(string artist, string trackName)
+        public async Task<byte[]> FetchCoverArtBytes(string artist, string trackName, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(artist) || string.IsNullOrWhiteSpace(trackName))
                 return null;
@@ -50,9 +51,11 @@ namespace SpotifyValley.Services
 
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 string term = $"{artist} {cleanTrackName}";
                 string url = $"https://itunes.apple.com/search?term={Uri.EscapeDataString(term)}&entity=song&limit=10";
-                string response = await this._http.GetStringAsync(url);
+                string response = await this._http.GetStringAsync(url, cancellationToken);
 
                 JObject json = JObject.Parse(response);
                 JArray results = json["results"] as JArray;
@@ -84,12 +87,18 @@ namespace SpotifyValley.Services
                 if (string.IsNullOrEmpty(bestArtUrl))
                     return null;
 
-                byte[] imageBytes = await this._http.GetByteArrayAsync(bestArtUrl);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                byte[] imageBytes = await this._http.GetByteArrayAsync(bestArtUrl, cancellationToken);
                 this._lastSearchQuery = queryKey;
                 this._lastResultBytes = imageBytes;
                 this.SaveToCache(queryKey, imageBytes);
 
                 return imageBytes;
+            }
+            catch (OperationCanceledException)
+            {
+                return null;
             }
             catch
             {

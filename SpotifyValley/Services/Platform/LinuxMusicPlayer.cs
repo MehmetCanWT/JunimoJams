@@ -80,16 +80,32 @@ namespace SpotifyValley.Services.Platform
             return this.RunShellCommand($"dbus-send --print-reply --dest={dest} /org/mpris/MediaPlayer2 {command}");
         }
 
-        private string RunShellCommand(string args)
+        private string RunShellCommand(string command)
         {
             try
             {
+                // Split the command into executable and arguments to avoid
+                // spawning an unnecessary /bin/bash wrapper process per call.
+                string fileName;
+                string arguments;
+                int firstSpace = command.IndexOf(' ');
+                if (firstSpace > 0)
+                {
+                    fileName = command.Substring(0, firstSpace);
+                    arguments = command.Substring(firstSpace + 1);
+                }
+                else
+                {
+                    fileName = command;
+                    arguments = "";
+                }
+
                 using var process = new Process
                 {
                     StartInfo = new ProcessStartInfo
                     {
-                        FileName = "/bin/bash",
-                        Arguments = $"-c \"{args}\"",
+                        FileName = fileName,
+                        Arguments = arguments,
                         RedirectStandardOutput = true,
                         UseShellExecute = false,
                         CreateNoWindow = true

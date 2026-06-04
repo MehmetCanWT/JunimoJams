@@ -7,16 +7,16 @@ namespace SpotifyValley.Services
     {
         private readonly IMusicPlayer _player;
 
-        public MusicService()
+        public MusicService(string[] extraPlayers = null)
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                this._player = new WindowsMusicPlayer();
+                this._player = new WindowsMusicPlayer(extraPlayers);
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
                 this._player = new MacMusicPlayer();
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 this._player = new LinuxMusicPlayer();
             else
-                this._player = new WindowsMusicPlayer(); // Fallback
+                this._player = new WindowsMusicPlayer(extraPlayers); // Fallback
         }
 
         public TrackInfo GetCurrentTrack()
@@ -40,3 +40,4 @@ namespace SpotifyValley.Services
         public void PreviousTrack() => this._player.PreviousTrack();
     }
 }
+
