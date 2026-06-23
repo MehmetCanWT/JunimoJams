@@ -46,7 +46,7 @@ jobs:
       # SMAPI ModBuildConfig already generates a zip at bin/Release/
       # but we also create a clean zip for maximum compatibility
       - name: Package mod
-      	run: |
+        run: |
           RELEASE_DIR="JunimoJams/bin/Release"
           ZIP_NAME="${{ env.MOD_NAME }} ${{ steps.version.outputs.MOD_VERSION }}.zip"
 
