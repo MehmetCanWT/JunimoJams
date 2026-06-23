@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Text;
@@ -7,26 +8,32 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
-namespace SpotifyValley.Services
+namespace JunimoJams.Services
 {
+    public class CoverArtResult
+    {
+        public byte[] Bytes { get; set; }
+        public string RealArtist { get; set; }
+    }
+
     public class ArtService
     {
         private readonly HttpClient _http;
         private readonly string _cachePath;
         private string _lastSearchQuery = "";
-        private byte[] _lastResultBytes;
+        private CoverArtResult _lastResult;
 
         public ArtService(string modPath)
         {
             this._http = new HttpClient();
             this._http.Timeout = TimeSpan.FromSeconds(5.0);
-            this._http.DefaultRequestHeaders.Add("User-Agent", "SpotifyValley/1.0");
+            this._http.DefaultRequestHeaders.Add("User-Agent", "JunimoJams/1.0");
 
             this._cachePath = Path.Combine(modPath, "cache");
             Directory.CreateDirectory(this._cachePath);
         }
 
-        public async Task<byte[]> FetchCoverArtBytes(string artist, string trackName, CancellationToken cancellationToken = default)
+        public async Task<CoverArtResult> FetchCoverArtBytes(string artist, string trackName, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(artist) || string.IsNullOrWhiteSpace(trackName))
                 return null;
@@ -37,23 +44,25 @@ namespace SpotifyValley.Services
             string cleanTrackName = this.CleanTitle(trackName);
             string queryKey = $"{artist}-{cleanTrackName}";
 
-            if (this._lastSearchQuery == queryKey && this._lastResultBytes != null)
-                return this._lastResultBytes;
+            if (this._lastSearchQuery == queryKey && this._lastResult != null)
+                return this._lastResult;
 
             // Check local cache first
-            byte[] cached = this.GetFromCache(queryKey);
+            byte[] cached = this.GetFromCache(queryKey, out string cachedArtist);
             if (cached != null)
             {
+                var result = new CoverArtResult { Bytes = cached, RealArtist = cachedArtist };
                 this._lastSearchQuery = queryKey;
-                this._lastResultBytes = cached;
-                return cached;
+                this._lastResult = result;
+                return result;
             }
 
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                string term = $"{artist} {cleanTrackName}";
+                bool isGenericArtist = artist.Equals("YouTube Music", StringComparison.OrdinalIgnoreCase);
+                string term = isGenericArtist ? cleanTrackName : $"{artist} {cleanTrackName}";
                 string url = $"https://itunes.apple.com/search?term={Uri.EscapeDataString(term)}&entity=song&limit=10";
                 string response = await this._http.GetStringAsync(url, cancellationToken);
 
@@ -65,21 +74,30 @@ namespace SpotifyValley.Services
 
                 string bestArtUrl = null;
                 double bestScore = -1;
+                string bestArtist = null;
 
                 foreach (JToken result in results)
                 {
                     string foundArtist = result["artistName"]?.ToString() ?? "";
                     string foundTitle = result["trackName"]?.ToString() ?? "";
 
-                    double score = this.CalculateMatchScore(artist, cleanTrackName, foundArtist, foundTitle);
+                    double score = isGenericArtist 
+                        ? this.GetStringSimilarity(cleanTrackName, foundTitle)
+                        : this.CalculateMatchScore(artist, cleanTrackName, foundArtist, foundTitle);
 
-                    if (score > bestScore && score > 0.5)
+                    double threshold = isGenericArtist ? 0.85 : 0.5;
+
+                    if (score > bestScore && score > threshold)
                     {
                         string art = result["artworkUrl100"]?.ToString();
                         if (!string.IsNullOrEmpty(art))
                         {
                             bestArtUrl = art.Replace("100x100", "600x600");
                             bestScore = score;
+                            if (isGenericArtist)
+                            {
+                                bestArtist = foundArtist;
+                            }
                         }
                     }
                 }
@@ -90,11 +108,13 @@ namespace SpotifyValley.Services
                 cancellationToken.ThrowIfCancellationRequested();
 
                 byte[] imageBytes = await this._http.GetByteArrayAsync(bestArtUrl, cancellationToken);
+                var finalResult = new CoverArtResult { Bytes = imageBytes, RealArtist = bestArtist };
+                
                 this._lastSearchQuery = queryKey;
-                this._lastResultBytes = imageBytes;
-                this.SaveToCache(queryKey, imageBytes);
+                this._lastResult = finalResult;
+                this.SaveToCache(queryKey, imageBytes, bestArtist);
 
-                return imageBytes;
+                return finalResult;
             }
             catch (OperationCanceledException)
             {
@@ -106,21 +126,35 @@ namespace SpotifyValley.Services
             }
         }
 
-        private byte[] GetFromCache(string key)
+        private byte[] GetFromCache(string key, out string cachedArtist)
         {
+            cachedArtist = null;
             try
             {
-                string fullPath = Path.Combine(this._cachePath, this.GetCacheFileName(key));
-                return File.Exists(fullPath) ? File.ReadAllBytes(fullPath) : null;
+                string baseName = Path.Combine(this._cachePath, this.GetCacheFileName(key));
+                if (File.Exists(baseName + ".png"))
+                {
+                    if (File.Exists(baseName + ".txt"))
+                    {
+                        cachedArtist = File.ReadAllText(baseName + ".txt", Encoding.UTF8);
+                    }
+                    return File.ReadAllBytes(baseName + ".png");
+                }
+                return null;
             }
             catch { return null; }
         }
 
-        private void SaveToCache(string key, byte[] bytes)
+        private void SaveToCache(string key, byte[] bytes, string realArtist)
         {
             try
             {
-                File.WriteAllBytes(Path.Combine(this._cachePath, this.GetCacheFileName(key)), bytes);
+                string baseName = Path.Combine(this._cachePath, this.GetCacheFileName(key));
+                File.WriteAllBytes(baseName + ".png", bytes);
+                if (!string.IsNullOrEmpty(realArtist))
+                {
+                    File.WriteAllText(baseName + ".txt", realArtist, Encoding.UTF8);
+                }
             }
             catch { }
         }
@@ -168,8 +202,21 @@ namespace SpotifyValley.Services
             t = t.ToLowerInvariant().Trim();
 
             if (s == t) return 1.0;
-            if (s.Contains(t) || t.Contains(s)) return 0.8;
-            return 0;
+            if (s.Contains(t) || t.Contains(s)) return 0.85;
+
+            // Jaccard similarity on word tokens
+            var wordsS = new HashSet<string>(s.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+            var wordsT = new HashSet<string>(t.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+            int intersection = 0;
+            foreach (var w in wordsS)
+            {
+                if (wordsT.Contains(w))
+                    intersection++;
+            }
+
+            int union = wordsS.Count + wordsT.Count - intersection;
+            return union == 0 ? 0 : (double)intersection / union;
         }
     }
 }

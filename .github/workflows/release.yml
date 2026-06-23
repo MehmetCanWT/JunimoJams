@@ -7,7 +7,7 @@ on:
   workflow_dispatch:  # Allow manual trigger
 
 env:
-  MOD_NAME: SpotifyValley
+  MOD_NAME: JunimoJams
   DOTNET_VERSION: "6.0.x"
 
 jobs:
@@ -38,7 +38,7 @@ jobs:
       - name: Extract mod version
         id: version
         run: |
-          VERSION=$(jq -r '.Version' SpotifyValley/manifest.json)
+          VERSION=$(jq -r '.Version' JunimoJams/manifest.json)
           echo "MOD_VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Detected mod version: $VERSION"
 
@@ -46,8 +46,8 @@ jobs:
       # SMAPI ModBuildConfig already generates a zip at bin/Release/
       # but we also create a clean zip for maximum compatibility
       - name: Package mod
-        run: |
-          RELEASE_DIR="SpotifyValley/bin/Release"
+      	run: |
+          RELEASE_DIR="JunimoJams/bin/Release"
           ZIP_NAME="${{ env.MOD_NAME }} ${{ steps.version.outputs.MOD_VERSION }}.zip"
 
           # If SMAPI build package already created the zip, use it
@@ -92,7 +92,7 @@ jobs:
           file_group_id: ${{ secrets.NEXUS_FILE_GROUP }}
           filename: ${{ env.ZIP_PATH }}
           version: ${{ steps.version.outputs.MOD_VERSION }}
-          display_name: "Spotify Valley v${{ steps.version.outputs.MOD_VERSION }}"
+          display_name: "Junimo Jams v${{ steps.version.outputs.MOD_VERSION }}"
           description: "Universal music HUD for Stardew Valley"
           file_category: main
           archive_existing_file: true

@@ -1,7 +1,7 @@
 using System;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace SpotifyValley.Services
+namespace JunimoJams.Services
 {
     public class TrackInfo : IDisposable
     {

@@ -9,7 +9,7 @@ obj/
 *.tmp
 *.bak
 
-# [STARYEW VALLEY]
+# [STARDEW VALLEY]
 .gemini/
 artifacts/
 *.zip

@@ -1,4 +1,4 @@
-# Spotify Valley — Theme Asset Specification
+# Junimo Jams — Theme Asset Specification
 
 This file defines the **exact required dimensions** for all PNG assets in a theme folder.
 When generating new theme images with AI (e.g. Nano Banana), use these specs.

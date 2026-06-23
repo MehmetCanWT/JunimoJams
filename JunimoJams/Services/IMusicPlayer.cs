@@ -1,8 +1,8 @@
-namespace SpotifyValley.Services
+namespace JunimoJams.Services
 {
     public interface IMusicPlayer
     {
-        bool IsSpotifyRunning();
+        bool IsPlayerRunning();
 
         TrackInfo GetCurrentTrack();
 

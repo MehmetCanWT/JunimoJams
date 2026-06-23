@@ -1,4 +1,4 @@
-namespace SpotifyValley
+namespace JunimoJams
 {
     public class ModConfig
     {
@@ -10,6 +10,12 @@ namespace SpotifyValley
         public string Theme { get; set; } = "default";
         public bool ShowAlbumArt { get; set; } = true;
         public bool ShowPlaybackButtons { get; set; } = true;
+
+        /// <summary>
+        /// Hide the HUD when a non-inventory menu (like World Atlas map) is open.
+        /// Prevents the music player from blocking map and overlay content.
+        /// </summary>
+        public bool HideOnMap { get; set; } = true;
 
         /// <summary>
         /// Additional music player process names to detect.

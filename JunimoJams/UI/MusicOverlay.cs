@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using SpotifyValley.Services;
+using JunimoJams.Services;
 using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Menus;
 
-namespace SpotifyValley.UI
+namespace JunimoJams.UI
 {
     public class MusicOverlay : IDisposable
     {
@@ -30,6 +30,12 @@ namespace SpotifyValley.UI
         private string _lastTrackName = "";
         private string _lastArtistName = "";
         private bool _layoutDirty = true;
+
+        // Fade animation — smooth transition when track changes
+        private float _fadeAlpha = 1f;
+        private bool _isFading = false;
+        private int _fadeTimer = 0;
+        private const int FADE_DURATION = 18; // ~300ms at 60fps
 
         // Cached Layout Values
         private float _cachedScale;
@@ -167,6 +173,9 @@ namespace SpotifyValley.UI
         public void OnTrackChanged()
         {
             this._layoutDirty = true;
+            this._fadeAlpha = 0f;
+            this._isFading = true;
+            this._fadeTimer = 0;
         }
 
         private void UpdateLayout(TrackInfo track, SpriteFont font)
@@ -271,29 +280,42 @@ namespace SpotifyValley.UI
                 this.UpdateLayout(track, font);
             }
 
+            // Update fade animation
+            if (this._isFading)
+            {
+                this._fadeTimer++;
+                this._fadeAlpha = Math.Min(1f, (float)this._fadeTimer / FADE_DURATION);
+                if (this._fadeAlpha >= 1f)
+                    this._isFading = false;
+            }
+
+            Color drawColor = Color.White * this._fadeAlpha;
+            Color textColor = Game1.textColor * this._fadeAlpha;
+            Color artistColor = Game1.textColor * (0.75f * this._fadeAlpha);
+
             // Draw Backgrounds
             if (this._backgroundTexture != null)
             {
                 // Stretch the background to exactly fit the calculated box rect
                 // (background image was generated at arbitrary size, so always stretch-draw it)
-                spriteBatch.Draw(this._backgroundTexture, this._mainBoxRect, Color.White);
+                spriteBatch.Draw(this._backgroundTexture, this._mainBoxRect, drawColor);
 
                 if (this._config.ShowPlaybackButtons && this._btnPlayTexture == null)
                 {
                     Texture2D btnBg = this._buttonBgTexture ?? this._backgroundTexture;
-                    IClickableMenu.drawTextureBox(spriteBatch, btnBg, new Rectangle(0, 0, btnBg.Width, btnBg.Height), this._prevRect.X, this._prevRect.Y, this._prevRect.Width, this._prevRect.Height, Color.White, this._cachedScale, false);
-                    IClickableMenu.drawTextureBox(spriteBatch, btnBg, new Rectangle(0, 0, btnBg.Width, btnBg.Height), this._playPauseRect.X, this._playPauseRect.Y, this._playPauseRect.Width, this._playPauseRect.Height, Color.White, this._cachedScale, false);
-                    IClickableMenu.drawTextureBox(spriteBatch, btnBg, new Rectangle(0, 0, btnBg.Width, btnBg.Height), this._nextRect.X, this._nextRect.Y, this._nextRect.Width, this._nextRect.Height, Color.White, this._cachedScale, false);
+                    IClickableMenu.drawTextureBox(spriteBatch, btnBg, new Rectangle(0, 0, btnBg.Width, btnBg.Height), this._prevRect.X, this._prevRect.Y, this._prevRect.Width, this._prevRect.Height, drawColor, this._cachedScale, false);
+                    IClickableMenu.drawTextureBox(spriteBatch, btnBg, new Rectangle(0, 0, btnBg.Width, btnBg.Height), this._playPauseRect.X, this._playPauseRect.Y, this._playPauseRect.Width, this._playPauseRect.Height, drawColor, this._cachedScale, false);
+                    IClickableMenu.drawTextureBox(spriteBatch, btnBg, new Rectangle(0, 0, btnBg.Width, btnBg.Height), this._nextRect.X, this._nextRect.Y, this._nextRect.Width, this._nextRect.Height, drawColor, this._cachedScale, false);
                 }
             }
             else
             {
-                IClickableMenu.drawTextureBox(spriteBatch, Game1.menuTexture, new Rectangle(0, 256, 60, 60), this._mainBoxRect.X, this._mainBoxRect.Y, this._mainBoxRect.Width, this._mainBoxRect.Height, Color.White, this._cachedScale, false);
+                IClickableMenu.drawTextureBox(spriteBatch, Game1.menuTexture, new Rectangle(0, 256, 60, 60), this._mainBoxRect.X, this._mainBoxRect.Y, this._mainBoxRect.Width, this._mainBoxRect.Height, drawColor, this._cachedScale, false);
                 if (this._config.ShowPlaybackButtons && this._btnPlayTexture == null)
                 {
-                    IClickableMenu.drawTextureBox(spriteBatch, Game1.menuTexture, new Rectangle(0, 256, 60, 60), this._prevRect.X, this._prevRect.Y, this._prevRect.Width, this._prevRect.Height, Color.White, this._cachedScale, false);
-                    IClickableMenu.drawTextureBox(spriteBatch, Game1.menuTexture, new Rectangle(0, 256, 60, 60), this._playPauseRect.X, this._playPauseRect.Y, this._playPauseRect.Width, this._playPauseRect.Height, Color.White, this._cachedScale, false);
-                    IClickableMenu.drawTextureBox(spriteBatch, Game1.menuTexture, new Rectangle(0, 256, 60, 60), this._nextRect.X, this._nextRect.Y, this._nextRect.Width, this._nextRect.Height, Color.White, this._cachedScale, false);
+                    IClickableMenu.drawTextureBox(spriteBatch, Game1.menuTexture, new Rectangle(0, 256, 60, 60), this._prevRect.X, this._prevRect.Y, this._prevRect.Width, this._prevRect.Height, drawColor, this._cachedScale, false);
+                    IClickableMenu.drawTextureBox(spriteBatch, Game1.menuTexture, new Rectangle(0, 256, 60, 60), this._playPauseRect.X, this._playPauseRect.Y, this._playPauseRect.Width, this._playPauseRect.Height, drawColor, this._cachedScale, false);
+                    IClickableMenu.drawTextureBox(spriteBatch, Game1.menuTexture, new Rectangle(0, 256, 60, 60), this._nextRect.X, this._nextRect.Y, this._nextRect.Width, this._nextRect.Height, drawColor, this._cachedScale, false);
                 }
             }
 
@@ -306,7 +328,7 @@ namespace SpotifyValley.UI
                 float artY = centerY - this._cachedArtSize / 2f;
                 this.DrawRoundedArt(spriteBatch, track.CoverArt,
                     new Rectangle((int)startX, (int)artY, (int)this._cachedArtSize, (int)this._cachedArtSize),
-                    radius: (int)(10f * this._cachedScale));
+                    radius: (int)(10f * this._cachedScale), alpha: this._fadeAlpha);
                 startX += this._cachedArtSize + this._cachedArtGap;
             }
 
@@ -328,39 +350,52 @@ namespace SpotifyValley.UI
                 textX = this._cachedPosition.X + this._cachedBoxW / 2f - actualW / 2f;
             }
 
-            spriteBatch.DrawString(font, this._cachedDisplaySong, new Vector2(textX, textStartY), Game1.textColor, 0f, Vector2.Zero, this._cachedScale, SpriteEffects.None, 1f);
-            spriteBatch.DrawString(font, this._cachedDisplayArtist, new Vector2(textX, textStartY + this._cachedLineHeight), Game1.textColor * 0.75f, 0f, Vector2.Zero, this._cachedScale, SpriteEffects.None, 1f);
+            // Draw text shadow for better readability on custom backgrounds
+            if (this._backgroundTexture != null)
+            {
+                Color shadowColor = Color.Black * (0.3f * this._fadeAlpha);
+                Vector2 shadowOffset = new Vector2(1f * this._cachedScale, 1f * this._cachedScale);
+                spriteBatch.DrawString(font, this._cachedDisplaySong, new Vector2(textX, textStartY) + shadowOffset, shadowColor, 0f, Vector2.Zero, this._cachedScale, SpriteEffects.None, 1f);
+                spriteBatch.DrawString(font, this._cachedDisplayArtist, new Vector2(textX, textStartY + this._cachedLineHeight) + shadowOffset, shadowColor, 0f, Vector2.Zero, this._cachedScale, SpriteEffects.None, 1f);
+            }
+
+            spriteBatch.DrawString(font, this._cachedDisplaySong, new Vector2(textX, textStartY), textColor, 0f, Vector2.Zero, this._cachedScale, SpriteEffects.None, 1f);
+            spriteBatch.DrawString(font, this._cachedDisplayArtist, new Vector2(textX, textStartY + this._cachedLineHeight), artistColor, 0f, Vector2.Zero, this._cachedScale, SpriteEffects.None, 1f);
 
             // Draw Playback Controls
             if (this._config.ShowPlaybackButtons)
             {
                 if (this._btnPlayTexture != null)
                 {
-                    spriteBatch.Draw(this._btnPrevTexture, this._prevRect, Color.White);
-                    spriteBatch.Draw(track.IsPlaying ? this._btnPauseTexture : this._btnPlayTexture, this._playPauseRect, Color.White);
-                    spriteBatch.Draw(this._btnNextTexture, this._nextRect, Color.White);
+                    Color prevBtnColor = this.IsHovering(this._prevRect) ? drawColor : drawColor * 0.85f;
+                    Color ppBtnColor = this.IsHovering(this._playPauseRect) ? drawColor : drawColor * 0.85f;
+                    Color nextBtnColor = this.IsHovering(this._nextRect) ? drawColor : drawColor * 0.85f;
+
+                    spriteBatch.Draw(this._btnPrevTexture, this._prevRect, prevBtnColor);
+                    spriteBatch.Draw(track.IsPlaying ? this._btnPauseTexture : this._btnPlayTexture, this._playPauseRect, ppBtnColor);
+                    spriteBatch.Draw(this._btnNextTexture, this._nextRect, nextBtnColor);
                 }
                 else if (this._buttonsTexture != null)
                 {
-                    spriteBatch.Draw(this._buttonsTexture, this._prevRect, SRC_PREV, Color.White);
-                    spriteBatch.Draw(this._buttonsTexture, this._playPauseRect, track.IsPlaying ? SRC_PAUSE : SRC_PLAY, Color.White);
-                    spriteBatch.Draw(this._buttonsTexture, this._nextRect, SRC_NEXT, Color.White);
+                    spriteBatch.Draw(this._buttonsTexture, this._prevRect, SRC_PREV, drawColor);
+                    spriteBatch.Draw(this._buttonsTexture, this._playPauseRect, track.IsPlaying ? SRC_PAUSE : SRC_PLAY, drawColor);
+                    spriteBatch.Draw(this._buttonsTexture, this._nextRect, SRC_NEXT, drawColor);
                 }
                 else
                 {
-                    this.DrawFallbackButton(spriteBatch, "[<<]", this._prevRect, this._cachedScale);
-                    this.DrawFallbackButton(spriteBatch, track.IsPlaying ? "[||]" : "[>]", this._playPauseRect, this._cachedScale);
-                    this.DrawFallbackButton(spriteBatch, "[>>]", this._nextRect, this._cachedScale);
+                    this.DrawFallbackButton(spriteBatch, "[<<]", this._prevRect, this._cachedScale, textColor);
+                    this.DrawFallbackButton(spriteBatch, track.IsPlaying ? "[||]" : "[>]", this._playPauseRect, this._cachedScale, textColor);
+                    this.DrawFallbackButton(spriteBatch, "[>>]", this._nextRect, this._cachedScale, textColor);
                 }
             }
         }
 
-        private void DrawFallbackButton(SpriteBatch b, string text, Rectangle rect, float scale)
+        private void DrawFallbackButton(SpriteBatch b, string text, Rectangle rect, float scale, Color color)
         {
             SpriteFont font = Game1.smallFont;
             Vector2 size = font.MeasureString(text) * scale;
             Vector2 pos = new Vector2(rect.X + (rect.Width - size.X) / 2f, rect.Y + (rect.Height - size.Y) / 2f);
-            b.DrawString(font, text, pos, Game1.textColor, 0f, Vector2.Zero, scale, SpriteEffects.None, 1f);
+            b.DrawString(font, text, pos, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 1f);
         }
 
         /// <summary>
@@ -371,7 +406,7 @@ namespace SpotifyValley.UI
         private Texture2D _roundedArtCache;
         private string _roundedArtCacheKey = "";
 
-        private void DrawRoundedArt(SpriteBatch spriteBatch, Texture2D source, Rectangle dest, int radius)
+        private void DrawRoundedArt(SpriteBatch spriteBatch, Texture2D source, Rectangle dest, int radius, float alpha = 1f)
         {
             // Cache key: texture reference + dest size (avoid rebuilding every frame)
             string cacheKey = $"{source.GetHashCode()}_{dest.Width}_{dest.Height}_{radius}";
@@ -382,7 +417,7 @@ namespace SpotifyValley.UI
                 this._roundedArtCacheKey = cacheKey;
             }
 
-            spriteBatch.Draw(this._roundedArtCache, dest, Color.White);
+            spriteBatch.Draw(this._roundedArtCache, dest, Color.White * alpha);
         }
 
         private Texture2D BuildRoundedTexture(Texture2D source, int w, int h, int radius)
@@ -425,6 +460,11 @@ namespace SpotifyValley.UI
             Texture2D tex = new Texture2D(Game1.graphics.GraphicsDevice, w, h);
             tex.SetData(dst);
             return tex;
+        }
+
+        private bool IsHovering(Rectangle rect)
+        {
+            return rect.Contains(new Point(Game1.getMouseX(true), Game1.getMouseY(true)));
         }
 
         public string HandleClick(int x, int y)

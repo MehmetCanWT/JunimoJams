@@ -1,12 +1,51 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
-namespace SpotifyValley.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     public class LinuxMusicPlayer : IMusicPlayer
     {
-        public bool IsSpotifyRunning()
+        private readonly string[] _priorityPlayers;
+
+        public LinuxMusicPlayer(string[] extraPlayers = null)
+        {
+            var players = new List<string>
+            {
+                // Tier 1 — Streaming
+                "spotify",
+                "tidal-hifi",
+                "cider",
+                "deezer",
+                "plexamp",
+                "nuclear",
+
+                // Tier 2 — Desktop Players
+                "clementine",
+                "strawberry",
+                "elisa",
+                "lollypop",
+                "vlc",
+                "rhythmbox",
+                "audacious",
+                "deadbeef"
+            };
+
+            if (extraPlayers != null)
+            {
+                foreach (string p in extraPlayers)
+                {
+                    string lower = p?.Trim().ToLowerInvariant();
+                    if (!string.IsNullOrEmpty(lower) && !players.Contains(lower))
+                        players.Add(lower);
+                }
+            }
+
+            this._priorityPlayers = players.ToArray();
+        }
+
+        public bool IsPlayerRunning()
         {
             return this.GetActivePlayer() != null;
         }
@@ -45,10 +84,8 @@ namespace SpotifyValley.Services.Platform
             string names = this.RunShellCommand("dbus-send --print-reply --dest=org.freedesktop.DBus /org.freedesktop.DBus org.freedesktop.DBus.ListNames");
             string[] lines = names.Split('\n');
             
-            // Priority list
-            string[] players = { "spotify", "google-play-music", "clementine", "vlc", "rhythmbox" };
-            
-            foreach (var p in players)
+            // Check priority list first
+            foreach (var p in this._priorityPlayers)
             {
                 if (lines.Any(l => l.Contains($"org.mpris.MediaPlayer2.{p}")))
                     return $"org.mpris.MediaPlayer2.{p}";

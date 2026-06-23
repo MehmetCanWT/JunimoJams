@@ -1,0 +1,16 @@
+{
+  "Name": "Junimo Jams",
+  "Author": "MehmetCanWT",
+  "Version": "5.2.0",
+  "Description": "A universal music HUD for Stardew Valley. Supports Spotify, YouTube Music, iTunes, Apple Music, Amazon Music, TIDAL, Cider, and many more.",
+  "UniqueID": "WT.JunimoJams",
+  "EntryDll": "JunimoJams.dll",
+  "MinimumApiVersion": "4.1.0",
+  "UpdateKeys": [ "Nexus:38791" ],
+  "Dependencies": [
+    {
+      "UniqueID": "spacechase0.GenericModConfigMenu",
+      "IsRequired": false
+    }
+  ]
+}

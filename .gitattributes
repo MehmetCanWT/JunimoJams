@@ -1,27 +1,15 @@
 # Auto detect text files and perform LF normalization
 * text=auto
-# [GENERAL]
-.vs/
-.vscode/
-bin/
-obj/
-*.user
-*.suo
-*.log
-*.tmp
-*.bak
 
-# [STARYEW VALLEY]
-.gemini/
-artifacts/
-*.zip
-stats.json
+# Mark image assets as binary (prevent LF normalization corruption)
+*.png binary
+*.jpg binary
+*.jpeg binary
 
-# [C# SERVICE]
-.vsconfig
-.editorconfig
-*.useros
-.DS_Store
-
-# [MACOS]
-.DS_Store
+# Ensure consistent line endings for code files
+*.cs text diff=csharp
+*.csproj text
+*.sln text
+*.json text
+*.md text
+*.yml text

@@ -5,14 +5,14 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Xna.Framework.Graphics;
-using SpotifyValley.Services;
-using SpotifyValley.UI;
+using JunimoJams.Services;
+using JunimoJams.UI;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Menus;
 
-namespace SpotifyValley
+namespace JunimoJams
 {
     public class ModEntry : Mod
     {
@@ -29,6 +29,7 @@ namespace SpotifyValley
         
         private byte[] _pendingArtBytes;
         private string _pendingArtTrackKey = "";
+        private string _pendingRealArtist;
         private readonly object _artLock = new object();
 
         // Cancellation support for album art fetching — cancels the previous
@@ -43,7 +44,7 @@ namespace SpotifyValley
                 this._musicService = new MusicService(this.Config.ExtraPlayers);
                 this._artService = new ArtService(base.Helper.DirectoryPath);
                 this._overlay = new MusicOverlay(this.Config, base.Helper);
-                base.Monitor.Log("Spotify Valley Initialized.", LogLevel.Info);
+                base.Monitor.Log("Junimo Jams Initialized.", LogLevel.Info);
             }
             catch (Exception ex)
             {
@@ -79,6 +80,7 @@ namespace SpotifyValley
             configMenu.AddBoolOption(base.ModManifest, () => this.Config.OnlyShowInInventory, v => this.Config.OnlyShowInInventory = v, () => "Only In Menu", () => "Show only when inventory open");
             configMenu.AddBoolOption(base.ModManifest, () => this.Config.ShowAlbumArt, v => this.Config.ShowAlbumArt = v, () => "Show Album Cover", () => "Toggle album art visibility");
             configMenu.AddBoolOption(base.ModManifest, () => this.Config.ShowPlaybackButtons, v => this.Config.ShowPlaybackButtons = v, () => "Show Buttons", () => "Toggle playback controls visibility");
+            configMenu.AddBoolOption(base.ModManifest, () => this.Config.HideOnMap, v => this.Config.HideOnMap = v, () => "Hide On Map", () => "Hide when map or overlay menus are open (World Atlas, etc.)");
 
             string[] themeOptions = this.GetInstalledThemes();
             configMenu.AddTextOption(base.ModManifest, () => this.Config.Theme, v => this.Config.Theme = v, () => "Theme", () => "Select the visual style (Folder name in assets/)", themeOptions);
@@ -106,7 +108,7 @@ namespace SpotifyValley
 
         private void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
         {
-            if (!this.IsHudVisible() && !this.Config.ShowHud)
+            if (!this.Config.ShowHud)
                 return;
 
             this._checkTimer++;
@@ -124,11 +126,17 @@ namespace SpotifyValley
 
             TrackInfo newTrack = this._musicService.GetCurrentTrack();
             
-            // Check if track changed
-            if (newTrack.Name == this._currentTrack.Name && newTrack.Artist == this._currentTrack.Artist)
+            // Check if track changed (consider artist name updates like "YouTube Music" -> Real Artist)
+            bool isSameTrack = newTrack.Name == this._currentTrack.Name && 
+                               (newTrack.Artist == this._currentTrack.Artist || 
+                               (newTrack.Artist == "YouTube Music" && this._currentTrack.Artist != "YouTube Music" && this._currentTrack.Artist != "Unknown"));
+
+            if (isSameTrack)
             {
                 // Reuse existing art
                 newTrack.CoverArt = this._currentTrack.CoverArt;
+                // Preserve the resolved real artist name
+                newTrack.Artist = this._currentTrack.Artist;
                 this._currentTrack = newTrack;
             }
             else
@@ -164,13 +172,14 @@ namespace SpotifyValley
             {
                 try
                 {
-                    byte[] imageBytes = await this._artService.FetchCoverArtBytes(track.Artist, track.Name, token);
-                    if (imageBytes != null && imageBytes.Length != 0)
+                    var result = await this._artService.FetchCoverArtBytes(track.Artist, track.Name, token);
+                    if (result != null && result.Bytes != null && result.Bytes.Length != 0)
                     {
                         lock (this._artLock)
                         {
-                            this._pendingArtBytes = imageBytes;
+                            this._pendingArtBytes = result.Bytes;
                             this._pendingArtTrackKey = key;
+                            this._pendingRealArtist = result.RealArtist;
                         }
                     }
                 }
@@ -194,6 +203,7 @@ namespace SpotifyValley
         {
             byte[] artToLoad = null;
             string artKey = null;
+            string realArtist = null;
 
             lock (this._artLock)
             {
@@ -201,7 +211,9 @@ namespace SpotifyValley
                 {
                     artToLoad = this._pendingArtBytes;
                     artKey = this._pendingArtTrackKey;
+                    realArtist = this._pendingRealArtist;
                     this._pendingArtBytes = null;
+                    this._pendingRealArtist = null;
                 }
             }
 
@@ -209,13 +221,22 @@ namespace SpotifyValley
             {
                 try
                 {
-                    if ($"{this._currentTrack.Artist}-{this._currentTrack.Name}" == artKey)
+                    bool keyMatch = $"{this._currentTrack.Artist}-{this._currentTrack.Name}" == artKey ||
+                                    (this._currentTrack.Artist == "YouTube Music" && $"YouTube Music-{this._currentTrack.Name}" == artKey);
+
+                    if (keyMatch)
                     {
                         using (MemoryStream stream = new MemoryStream(artToLoad))
                         {
                             // Dispose old art before creating new one
                             this._currentTrack.CoverArt?.Dispose();
                             this._currentTrack.CoverArt = Texture2D.FromStream(Game1.graphics.GraphicsDevice, stream);
+                            
+                            if (!string.IsNullOrEmpty(realArtist))
+                            {
+                                this._currentTrack.Artist = realArtist;
+                            }
+                            
                             this._overlay?.OnTrackChanged(); // Trigger layout update
                         }
                     }
@@ -291,12 +312,10 @@ namespace SpotifyValley
             else if (action == "next")
             {
                 this._musicService.NextTrack();
-                this.UpdateMusicState();
             }
             else if (action == "prev")
             {
                 this._musicService.PreviousTrack();
-                this.UpdateMusicState();
             }
 
             if (action != null)
@@ -310,7 +329,25 @@ namespace SpotifyValley
             if (!this.Config.ShowHud || !Context.IsWorldReady)
                 return false;
 
-            return !this.Config.OnlyShowInInventory || Game1.activeClickableMenu is GameMenu;
+            var menu = Game1.activeClickableMenu;
+
+            // Hide on map/overlay menus if configured
+            if (this.Config.HideOnMap && menu != null)
+            {
+                // Hide on non-inventory menus (like World Atlas)
+                if (!(menu is GameMenu))
+                    return false;
+
+                // Hide on the map tab inside standard GameMenu
+                if (menu is GameMenu gameMenu && gameMenu.currentTab == GameMenu.mapTab)
+                    return false;
+            }
+
+            // "Only In Menu" mode: show only when GameMenu is open
+            if (this.Config.OnlyShowInInventory)
+                return menu is GameMenu;
+
+            return true;
         }
 
         /// <summary>

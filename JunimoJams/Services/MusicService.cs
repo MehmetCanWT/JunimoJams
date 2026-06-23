@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
-using SpotifyValley.Services.Platform;
+using JunimoJams.Services.Platform;
 
-namespace SpotifyValley.Services
+namespace JunimoJams.Services
 {
     public class MusicService
     {
@@ -12,9 +12,9 @@ namespace SpotifyValley.Services
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 this._player = new WindowsMusicPlayer(extraPlayers);
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                this._player = new MacMusicPlayer();
+                this._player = new MacMusicPlayer(extraPlayers);
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                this._player = new LinuxMusicPlayer();
+                this._player = new LinuxMusicPlayer(extraPlayers);
             else
                 this._player = new WindowsMusicPlayer(extraPlayers); // Fallback
         }
@@ -31,7 +31,7 @@ namespace SpotifyValley.Services
             }
         }
 
-        public bool IsPlayerRunning() => this._player.IsSpotifyRunning();
+        public bool IsPlayerRunning() => this._player.IsPlayerRunning();
 
         public void TogglePlayPause() => this._player.TogglePlayPause();
 
