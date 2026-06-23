@@ -27,6 +27,10 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      # ── Add SMAPI Build Environment ──────────────────────────────
+      - name: Add build environment
+        uses: Pathoschild/SMAPI-ModBuildWorkflow/add-build-environment@v1
+
       # ── Restore & Build ──────────────────────────────────────────
       - name: Restore dependencies
         run: dotnet restore
