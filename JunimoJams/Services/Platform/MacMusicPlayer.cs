@@ -47,7 +47,7 @@ namespace JunimoJams.Services.Platform
             if (activeBrowser != null)
             {
                 string tabTitle = this.GetBrowserTabTitle(activeBrowser);
-                return this.ParseYouTubeMusicTitle(tabTitle);
+                return YouTubeMusicParser.ParseTitle(tabTitle);
             }
 
             string app = this.GetActiveApp();
@@ -71,20 +71,80 @@ namespace JunimoJams.Services.Platform
 
         public void NextTrack()
         {
-            if (this.GetActiveBrowserWithYtMusic() == null)
+            if (this.GetActiveBrowserWithYtMusic() != null)
+                this.SendMediaKey("next");
+            else
                 this.RunActiveAppCommand("next track");
         }
 
         public void PreviousTrack()
         {
-            if (this.GetActiveBrowserWithYtMusic() == null)
+            if (this.GetActiveBrowserWithYtMusic() != null)
+                this.SendMediaKey("previous");
+            else
                 this.RunActiveAppCommand("previous track");
         }
 
         public void TogglePlayPause()
         {
-            if (this.GetActiveBrowserWithYtMusic() == null)
+            if (this.GetActiveBrowserWithYtMusic() != null)
+                this.SendMediaKey("playpause");
+            else
                 this.RunActiveAppCommand("playpause");
+        }
+
+        /// <summary>
+        /// Sends a system-level media key event on macOS using osascript.
+        /// This allows controlling browser-based YouTube Music playback.
+        /// </summary>
+        private void SendMediaKey(string action)
+        {
+            // macOS NX_KEYTYPE: Play/Pause=16, Next=17, Previous=18
+            // Using CGEvent-based approach to simulate media key press
+            int keyCode = action switch
+            {
+                "playpause" => 16,
+                "next" => 17,
+                "previous" => 18,
+                _ => -1
+            };
+
+            if (keyCode < 0) return;
+
+            // Simulate media key down and up events via Python bridge
+            // (osascript alone cannot send NX_KEYTYPE events)
+            string script = $@"
+                import Quartz
+                event = Quartz.NSEvent.otherEventWithType_location_modifierFlags_timestamp_windowNumber_context_subtype_data1_data2_(
+                    14, (0, 0), 0xa00, 0, 0, 0, 8, ({keyCode} << 16) | (0xa << 8), -1)
+                Quartz.CGEventPost(0, event.CGEvent())
+                import time; time.sleep(0.05)
+                event = Quartz.NSEvent.otherEventWithType_location_modifierFlags_timestamp_windowNumber_context_subtype_data1_data2_(
+                    14, (0, 0), 0xb00, 0, 0, 0, 8, ({keyCode} << 16) | (0xb << 8), -1)
+                Quartz.CGEventPost(0, event.CGEvent())
+            ";
+            try
+            {
+                using var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "python3",
+                        Arguments = $"-c \"{script.Replace("\"", "\\\"")}\"",
+                        RedirectStandardOutput = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+                process.Start();
+                process.WaitForExit(2000);
+            }
+            catch
+            {
+                // Fallback: try osascript key code approach
+                // key code 16 = play/pause media key in some configurations
+                this.RunAppleScript($"tell application \"System Events\" to key code {keyCode}");
+            }
         }
 
         private string GetActiveBrowserWithYtMusic()
@@ -116,89 +176,6 @@ namespace JunimoJams.Services.Platform
             return this.RunAppleScript(script).Trim();
         }
 
-        private TrackInfo ParseYouTubeMusicTitle(string title)
-        {
-            title = title.Trim();
-            bool isPlaying = true; // Default to true if active
-
-            // Clean up play/pause prefixes if present
-            if (title.StartsWith("▶"))
-            {
-                isPlaying = true;
-                title = title.Substring(1).Trim();
-            }
-            else if (title.StartsWith("⏸"))
-            {
-                isPlaying = false;
-                title = title.Substring(1).Trim();
-            }
-
-            // Strip browser suffixes
-            string[] browserSuffixes = { " - Google Chrome", " - Safari", " - Microsoft Edge", " - Brave", " - Opera", " - Vivaldi", " - Arc", " - Helium" };
-            foreach (var suffix in browserSuffixes)
-            {
-                int idx = title.LastIndexOf(suffix, StringComparison.OrdinalIgnoreCase);
-                if (idx > 0)
-                    title = title.Substring(0, idx).Trim();
-            }
-
-            // Check if it's just "YouTube Music"
-            if (title.Equals("YouTube Music", StringComparison.OrdinalIgnoreCase))
-            {
-                if (isPlaying)
-                {
-                    return new TrackInfo
-                    {
-                        Name = "Playing",
-                        Artist = "YouTube Music",
-                        IsPlaying = true
-                    };
-                }
-                return new TrackInfo
-                {
-                    Name = "Paused / Idle",
-                    Artist = "YouTube Music",
-                    IsPlaying = false
-                };
-            }
-
-            // Find "YouTube Music" index to parse song/artist
-            int ytIndex = title.IndexOf("YouTube Music", StringComparison.OrdinalIgnoreCase);
-            if (ytIndex > 0)
-            {
-                string trackPart = title.Substring(0, ytIndex).Trim();
-                string[] separators = { " - ", " — ", " – ", " -", " —", " –", " | ", " |", "| ", "|" };
-                foreach (var sep in separators)
-                {
-                    if (trackPart.EndsWith(sep))
-                        trackPart = trackPart.Substring(0, trackPart.Length - sep.Length).Trim();
-                }
-
-                string[] splitSeps = { " - ", " — ", " – " };
-                foreach (var sep in splitSeps)
-                {
-                    if (trackPart.Contains(sep))
-                    {
-                        string[] parts = trackPart.Split(new[] { sep }, 2, StringSplitOptions.None);
-                        return new TrackInfo
-                        {
-                            Name = parts[0].Trim(),
-                            Artist = parts[1].Trim(),
-                            IsPlaying = isPlaying
-                        };
-                    }
-                }
-
-                return new TrackInfo
-                {
-                    Name = trackPart,
-                    Artist = "YouTube Music",
-                    IsPlaying = isPlaying
-                };
-            }
-
-            return new TrackInfo { Name = title, Artist = "YouTube Music", IsPlaying = isPlaying };
-        }
 
         private string GetActiveApp()
         {

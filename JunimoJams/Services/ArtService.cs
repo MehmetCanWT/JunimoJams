@@ -16,12 +16,13 @@ namespace JunimoJams.Services
         public string RealArtist { get; set; }
     }
 
-    public class ArtService
+    public class ArtService : IDisposable
     {
         private readonly HttpClient _http;
         private readonly string _cachePath;
         private string _lastSearchQuery = "";
         private CoverArtResult _lastResult;
+        private readonly object _cacheLock = new object();
 
         public ArtService(string modPath)
         {
@@ -44,8 +45,11 @@ namespace JunimoJams.Services
             string cleanTrackName = this.CleanTitle(trackName);
             string queryKey = $"{artist}-{cleanTrackName}";
 
-            if (this._lastSearchQuery == queryKey && this._lastResult != null)
-                return this._lastResult;
+            lock (this._cacheLock)
+            {
+                if (this._lastSearchQuery == queryKey && this._lastResult != null)
+                    return this._lastResult;
+            }
 
             // Check local cache first
             byte[] cached = this.GetFromCache(queryKey, out string cachedArtist);
@@ -110,8 +114,11 @@ namespace JunimoJams.Services
                 byte[] imageBytes = await this._http.GetByteArrayAsync(bestArtUrl, cancellationToken);
                 var finalResult = new CoverArtResult { Bytes = imageBytes, RealArtist = bestArtist };
                 
-                this._lastSearchQuery = queryKey;
-                this._lastResult = finalResult;
+                lock (this._cacheLock)
+                {
+                    this._lastSearchQuery = queryKey;
+                    this._lastResult = finalResult;
+                }
                 this.SaveToCache(queryKey, imageBytes, bestArtist);
 
                 return finalResult;
@@ -163,7 +170,12 @@ namespace JunimoJams.Services
         {
             // Use MD5 hash as a stable, short filename
             byte[] hash = System.Security.Cryptography.MD5.HashData(Encoding.UTF8.GetBytes(key));
-            return Convert.ToHexString(hash) + ".png";
+            return Convert.ToHexString(hash);
+        }
+
+        public void Dispose()
+        {
+            this._http?.Dispose();
         }
 
         private string CleanTitle(string title)

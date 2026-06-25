@@ -178,7 +178,7 @@ namespace JunimoJams.Services.Platform
                             GetWindowThreadProcessId(hWnd, out uint pid);
                             try
                             {
-                                var proc = Process.GetProcessById((int)pid);
+                                using var proc = Process.GetProcessById((int)pid);
                                 string procName = proc.ProcessName;
                                 if (BrowserProcessNames.Contains(procName.ToLowerInvariant()))
                                 {
@@ -196,84 +196,9 @@ namespace JunimoJams.Services.Platform
                     if (!rawTitle.Contains("YouTube Music", StringComparison.OrdinalIgnoreCase))
                         continue;
 
-                    string title = rawTitle.Trim();
-                    bool isPlaying = true; // Default to true if active
-
-                    // Clean up play/pause prefixes if present
-                    if (title.StartsWith("▶"))
-                    {
-                        isPlaying = true;
-                        title = title.Substring(1).Trim();
-                    }
-                    else if (title.StartsWith("⏸"))
-                    {
-                        isPlaying = false;
-                        title = title.Substring(1).Trim();
-                    }
-
-                    // Strip browser suffixes
-                    string[] browserSuffixes = { " - Google Chrome", " - Microsoft Edge", " - Mozilla Firefox", " - Brave", " - Opera", " - Vivaldi", " - Arc", " - Helium" };
-                    foreach (var suffix in browserSuffixes)
-                    {
-                        int idx = title.LastIndexOf(suffix, StringComparison.OrdinalIgnoreCase);
-                        if (idx > 0)
-                            title = title.Substring(0, idx).Trim();
-                    }
-
-                    // Check if it's just "YouTube Music"
-                    if (title.Equals("YouTube Music", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (isPlaying)
-                        {
-                            return new TrackInfo
-                            {
-                                Name = "Playing",
-                                Artist = "YouTube Music",
-                                IsPlaying = true
-                            };
-                        }
-                        return new TrackInfo
-                        {
-                            Name = "Paused / Idle",
-                            Artist = "YouTube Music",
-                            IsPlaying = false
-                        };
-                    }
-
-                    // Find "YouTube Music" index to parse song/artist
-                    int ytIndex = title.IndexOf("YouTube Music", StringComparison.OrdinalIgnoreCase);
-                    if (ytIndex > 0)
-                    {
-                        string trackPart = title.Substring(0, ytIndex).Trim();
-                        string[] separators = { " - ", " — ", " – ", " -", " —", " –", " | ", " |", "| ", "|" };
-                        foreach (var sep in separators)
-                        {
-                            if (trackPart.EndsWith(sep))
-                                trackPart = trackPart.Substring(0, trackPart.Length - sep.Length).Trim();
-                        }
-
-                        string[] splitSeps = { " - ", " — ", " – " };
-                        foreach (var sep in splitSeps)
-                        {
-                            if (trackPart.Contains(sep))
-                            {
-                                string[] parts = trackPart.Split(new[] { sep }, 2, StringSplitOptions.None);
-                                return new TrackInfo
-                                {
-                                    Name = parts[0].Trim(),
-                                    Artist = parts[1].Trim(),
-                                    IsPlaying = isPlaying
-                                };
-                            }
-                        }
-
-                        return new TrackInfo
-                        {
-                            Name = trackPart,
-                            Artist = "YouTube Music",
-                            IsPlaying = isPlaying
-                        };
-                    }
+                    var track = YouTubeMusicParser.ParseTitle(rawTitle);
+                    if (track != null)
+                        return track;
                 }
             }
             catch {}
@@ -288,8 +213,16 @@ namespace JunimoJams.Services.Platform
         {
             foreach (var name in this._playerProcessNames)
             {
-                var p = Process.GetProcessesByName(name).FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.MainWindowTitle));
-                if (p != null) return p;
+                var processes = Process.GetProcessesByName(name);
+                Process match = null;
+                foreach (var p in processes)
+                {
+                    if (match == null && !string.IsNullOrWhiteSpace(p.MainWindowTitle))
+                        match = p;
+                    else
+                        p.Dispose();
+                }
+                if (match != null) return match;
             }
             return null;
         }

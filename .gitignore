@@ -12,6 +12,7 @@ obj/
 # [STARDEW VALLEY]
 .gemini/
 artifacts/
+cache/
 *.zip
 stats.json
 

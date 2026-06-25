@@ -5,7 +5,8 @@
   "HudScale": 1.0,
   "OnlyShowInInventory": false,
   "HideOnMap": true,
-  "Theme": "default",
+  "Theme": "overgrown_grass_flowery",
   "ShowAlbumArt": true,
-  "ShowPlaybackButtons": true
+  "ShowPlaybackButtons": true,
+  "ExtraPlayers": []
 }

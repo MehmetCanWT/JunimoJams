@@ -40,4 +40,3 @@ namespace JunimoJams.Services
         public void PreviousTrack() => this._player.PreviousTrack();
     }
 }
-
