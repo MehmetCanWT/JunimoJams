@@ -1,15 +1,13 @@
-<div align="center">
-  <img src="https://raw.githubusercontent.com/MehmetCanWT/JunimoJams/main/assets/banner.png" alt="Junimo Jams Banner" />
-  
-  # ✧ Junimo Jams ✧
-  ### *Your Music. Your Farm. Your Vibe.*
-  
-  ---
-  
-  > *"Why pause your cozy farm life to check a song title, when the music can flow right through the valley?"*
-  
-  ---
-</div>
+![Junimo Jams Banner](https://raw.githubusercontent.com/MehmetCanWT/JunimoJams/main/assets/banner.png)
+
+# ✧ Junimo Jams ✧
+> **Your Music. Your Farm. Your Vibe.**
+
+---
+
+### *"Why pause your cozy farm life to check a song title, when the music can flow right through the valley?"*
+
+---
 
 ## 🌿 The Story
 
@@ -31,23 +29,29 @@ You can find the detailed changelog and version history for each update directly
 
 ## ✨ Premium Features
 
-#### 🖼️ **Real-Time Album Art Search**
-> Automatically searches and retrieves high-resolution covers. Uses an advanced Jaccard similarity algorithm to ensure 99% matching accuracy even for generic/browser playing states.
+* 🖼️ **Real-Time Album Art Search**
+  * Automatically searches and retrieves high-resolution covers.
+  * Uses an advanced Jaccard similarity algorithm to ensure **99% matching accuracy** even for generic/browser playing states.
 
-#### 🎮 **Tactile HUD Controls**
-> Prev, Play/Pause, and Next buttons rendered directly onto the HUD frame. Control your music without tabbing out.
+* 🎮 **Tactile HUD Controls**
+  * Prev, Play/Pause, and Next buttons rendered directly onto the HUD frame.
+  * Control your music instantly without ever tabbing out of the game.
 
-#### 🎨 **Cozy Theming Engine**
-> Comes with multiple handcrafted themes including the pastel **Overgrown Grass Flowery** theme (adorned with delicate vines and flowers) and the classic **Stardew Valley Wood** aesthetic.
+* 🎨 **Cozy Theming Engine**
+  * Comes with multiple handcrafted themes, including:
+    * **Overgrown Grass Flowery** — Adorned with delicate vines and flowers.
+    * **Stardew Valley Wood** — The classic, warm wood aesthetic.
 
-#### 🔤 **Universal Character Map**
-> Turkish, Cyrillic, and special international characters are automatically normalized, meaning no more broken fonts or weird boxes.
+* 🔤 **Universal Character Map**
+  * Turkish, Cyrillic, and special international characters are automatically normalized.
+  * No more broken fonts, empty glyph boxes, or weird text rendering.
 
-#### 🐧 **True Cross-Platform**
-> Built to run flawlessly on Windows, macOS, and Linux (fully integrated with MPRIS2 desktop audio protocols).
+* 🐧 **True Cross-Platform**
+  * Built to run flawlessly on **Windows**, **macOS**, and **Linux** (fully integrated with MPRIS2 desktop audio protocols).
 
-#### ⚡ **Zero Performance Impact**
-> Features a smart local caching system for album covers and redraws only when state changes. Your FPS remains completely untouched.
+* ⚡ **Zero Performance Impact**
+  * Features a smart local caching system for album covers and redraws only when state changes.
+  * Your FPS remains completely untouched.
 
 ---
 
@@ -71,8 +75,8 @@ You can find the detailed changelog and version history for each update directly
 
 ### 🎨 Want to Create a Custom Theme?
 Drop your custom `.png` assets in: `Mods/JunimoJams/assets/your_theme_name/`
-* `background.png` (400x150 px) — The HUD frame
-* `btn_play.png` / `btn_pause.png` / `btn_next.png` / `btn_prev.png` (128x128 px) — The buttons
+* `background.png` (400x150 px) — *The HUD frame*
+* `btn_play.png` / `btn_pause.png` / `btn_next.png` / `btn_prev.png` (128x128 px) — *The controls*
 
 Select your theme instantly inside the game config menu. See `assets/THEME_SPEC.md` for full design guidelines.
 
@@ -86,6 +90,4 @@ Select your theme instantly inside the game config menu. See `assets/THEME_SPEC.
 
 ---
 
-<div align="center">
-  <sub style="color: #9CA3AF">Stardew Valley is a trademark of ConcernedApe LLC. This mod is an independent creation and not affiliated with ConcernedApe, Spotify, Apple, Google, or any other music platform.</sub>
-</div>
+*Stardew Valley is a trademark of ConcernedApe LLC. This mod is an independent creation and not affiliated with ConcernedApe, Spotify, Apple, Google, or any other music platform.*
