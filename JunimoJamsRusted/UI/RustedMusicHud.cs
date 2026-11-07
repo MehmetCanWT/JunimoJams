@@ -46,8 +46,8 @@ namespace JunimoJamsRusted.UI
         private TrackInfo _lastTrack = new();
 
         public const int CARD_WIDTH = 320;
-        public const int CARD_HEIGHT = 76;
-        public const int ART_SIZE = 60;
+        public const int CARD_HEIGHT = 82;
+        public const int ART_SIZE = 64;
         public const int CORNER_RADIUS = 8;
         public const int BORDER_WIDTH = 2;
 
@@ -104,8 +104,8 @@ namespace JunimoJamsRusted.UI
             Rectangle cardRect = new Rectangle(cardX, cardY, CARD_WIDTH, CARD_HEIGHT);
             bool isOverCard = cardRect.Contains((int)mouseX, (int)mouseY);
 
-            int ctrlY = cardY + 54;
-            int centerX = cardX + 78 + (234 / 2); // 195
+            int ctrlY = cardY + 58;
+            int centerX = cardX + 82 + (228 / 2);
 
             Rectangle prevHit = new Rectangle(centerX - 44 - 4, ctrlY - 4, 24, 24);
             Rectangle playHit = new Rectangle(centerX - 8 - 4, ctrlY - 4, 24, 24);
@@ -183,9 +183,9 @@ namespace JunimoJamsRusted.UI
                 );
             }
 
-            // 3. Album Art Slot (60x60, flush at cardX + 8, cardY + 8)
-            int artX = cardX + 8;
-            int artY = cardY + 8;
+            // 3. Album Art Slot (64x64, flush at cardX + 9, cardY + 9)
+            int artX = cardX + 9;
+            int artY = cardY + 9;
             Rectangle artRect = new Rectangle(artX, artY, ART_SIZE, ART_SIZE);
 
             spriteBatch.Draw(this._artBgTexture!, artRect, new Color(11, 23, 17));
@@ -202,9 +202,9 @@ namespace JunimoJamsRusted.UI
                 spriteBatch.DrawString(Game1.smallFont, "*", center, colors.BorderHighlight, 0f, Vector2.Zero, 1.2f, SpriteEffects.None, 1f);
             }
 
-            // 4. Content Column (cardX + 78 to cardX + 312, width = 234px)
-            int colX = cardX + 78;
-            int colW = 234;
+            // 4. Content Column (cardX + 82 to cardX + 310, width = 228px)
+            int colX = cardX + 82;
+            int colW = 228;
 
             // Row 1: Title & Time
             string displayTitle = this._config.EnableMarqueeText ? this._titleMarquee.GetVisibleText() : StringUtils.NormalizeForHud(track.Name);
@@ -217,27 +217,27 @@ namespace JunimoJamsRusted.UI
                 timeStr = $"{FormatTime(currentPos)} / {FormatTime(track.Duration)}";
             }
 
-            float timeWidth = Game1.tinyFont.MeasureString(timeStr).X;
+            float timeScale = 0.52f;
+            float timeWidth = Game1.smallFont.MeasureString(timeStr).X * timeScale;
             Vector2 timePos = new Vector2(colX + colW - timeWidth, cardY + 9);
-            spriteBatch.DrawString(Game1.tinyFont, timeStr, timePos + new Vector2(1, 1), Color.Black * 0.7f);
-            spriteBatch.DrawString(Game1.tinyFont, timeStr, timePos, colors.Time);
+            spriteBatch.DrawString(Game1.smallFont, timeStr, timePos + new Vector2(1, 1), Color.Black * 0.7f, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
+            spriteBatch.DrawString(Game1.smallFont, timeStr, timePos, colors.Time, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
 
-            // Title with shadow (clipped so it doesn't overlap time)
-            int maxTitleWidth = (int)(colW - timeWidth - 8);
+            // Title with shadow (scaled 0.62f, fits perfectly above artist)
             Vector2 titlePos = new Vector2(colX, cardY + 8);
-            spriteBatch.DrawString(Game1.smallFont, displayTitle, titlePos + new Vector2(1, 1), Color.Black * 0.85f, 0f, Vector2.Zero, 0.65f, SpriteEffects.None, 1f);
-            spriteBatch.DrawString(Game1.smallFont, displayTitle, titlePos, colors.Title, 0f, Vector2.Zero, 0.65f, SpriteEffects.None, 1f);
+            spriteBatch.DrawString(Game1.smallFont, displayTitle, titlePos + new Vector2(1, 1), Color.Black * 0.85f, 0f, Vector2.Zero, 0.62f, SpriteEffects.None, 1f);
+            spriteBatch.DrawString(Game1.smallFont, displayTitle, titlePos, colors.Title, 0f, Vector2.Zero, 0.62f, SpriteEffects.None, 1f);
 
-            // Row 2: Equalizer & Artist
+            // Row 2: Equalizer & Artist (Y = cardY + 28, height = 12px)
             int artistX = colX;
             if (track.IsPlaying)
             {
                 this._equalizer.Update(isPlaying: true);
                 float[] bars = this._equalizer.GetBars();
-                int eqY = cardY + 36;
+                int eqY = cardY + 38;
                 for (int i = 0; i < 3; i++)
                 {
-                    int barH = Math.Max(2, (int)(bars[i] * 9f));
+                    int barH = Math.Max(2, (int)(bars[i] * 8f));
                     Rectangle barRect = new Rectangle(colX + (i * 3), eqY - barH, 2, barH);
                     spriteBatch.Draw(Game1.staminaRect, barRect, colors.ProgressFill);
                 }
@@ -247,13 +247,14 @@ namespace JunimoJamsRusted.UI
             string displayArtist = this._config.EnableMarqueeText ? this._artistMarquee.GetVisibleText() : StringUtils.NormalizeForHud(track.Artist);
             if (string.IsNullOrWhiteSpace(displayArtist)) displayArtist = "Music Player";
 
-            Vector2 artistPos = new Vector2(artistX, cardY + 25);
-            spriteBatch.DrawString(Game1.tinyFont, displayArtist, artistPos + new Vector2(1, 1), Color.Black * 0.7f, 0f, Vector2.Zero, 1.05f, SpriteEffects.None, 1f);
-            spriteBatch.DrawString(Game1.tinyFont, displayArtist, artistPos, colors.Artist, 0f, Vector2.Zero, 1.05f, SpriteEffects.None, 1f);
+            float artistScale = 0.52f;
+            Vector2 artistPos = new Vector2(artistX, cardY + 28);
+            spriteBatch.DrawString(Game1.smallFont, displayArtist, artistPos + new Vector2(1, 1), Color.Black * 0.7f, 0f, Vector2.Zero, artistScale, SpriteEffects.None, 1f);
+            spriteBatch.DrawString(Game1.smallFont, displayArtist, artistPos, colors.Artist, 0f, Vector2.Zero, artistScale, SpriteEffects.None, 1f);
 
-            // Row 3: Slim Progress Bar (5px tall)
-            int barY = cardY + 43;
-            Rectangle barTrackRect = new Rectangle(colX, barY, colW, 5);
+            // Row 3: Slim Progress Bar (Y = cardY + 47, height = 4px)
+            int barY = cardY + 47;
+            Rectangle barTrackRect = new Rectangle(colX, barY, colW, 4);
             spriteBatch.Draw(Game1.staminaRect, barTrackRect, colors.ProgressTrack);
 
             // 1px bar border
@@ -266,17 +267,17 @@ namespace JunimoJamsRusted.UI
                 int fillWidth = (int)(colW * ratio);
                 if (fillWidth > 0)
                 {
-                    spriteBatch.Draw(Game1.staminaRect, new Rectangle(colX, barY, fillWidth, 5), colors.ProgressFill);
+                    spriteBatch.Draw(Game1.staminaRect, new Rectangle(colX, barY, fillWidth, 4), colors.ProgressFill);
                 }
             }
 
-            // Row 4: Centered Lucide Media Controls
+            // Row 4: Centered Lucide Media Controls (Y = cardY + 58)
             if (this._config.ShowPlaybackButtons)
             {
                 float mouseX = Game1.getMouseX(ui_scale: true);
                 float mouseY = Game1.getMouseY(ui_scale: true);
 
-                int ctrlY = cardY + 54;
+                int ctrlY = cardY + 58;
                 int centerX = colX + (colW / 2);
 
                 Rectangle prevRect = new Rectangle(centerX - 44, ctrlY, 16, 16);

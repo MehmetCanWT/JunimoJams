@@ -11,10 +11,10 @@ namespace JunimoJamsRusted.Services
         public MusicService(string[]? extraPlayers = null)
         {
             // Fully plug-and-play zero-dependency routing:
-            // Under Proton or Native Linux, connect directly to the host D-Bus session socket.
+            // Under Proton or Native Linux, use the non-blocking background AsyncProtonMprisClient
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || WineDetector.IsRunningUnderWineOrProton())
             {
-                this._player = new PureDbusSocketClient(extraPlayers);
+                this._player = new AsyncProtonMprisClient(extraPlayers);
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
@@ -26,7 +26,7 @@ namespace JunimoJamsRusted.Services
             }
             else
             {
-                this._player = new PureDbusSocketClient(extraPlayers);
+                this._player = new AsyncProtonMprisClient(extraPlayers);
             }
         }
 
