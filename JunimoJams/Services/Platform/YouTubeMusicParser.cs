@@ -1,7 +1,7 @@
 using System;
 using System.Diagnostics;
 
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     /// <summary>
     /// Shared helper for parsing YouTube Music browser tab titles into TrackInfo.

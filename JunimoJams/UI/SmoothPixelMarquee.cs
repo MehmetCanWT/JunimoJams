@@ -1,6 +1,6 @@
 using System;
 
-namespace JunimoJamsRusted.UI
+namespace JunimoJams.UI
 {
     /// <summary>
     /// Butter-smooth, 60 FPS sub-pixel linear marquee controller.

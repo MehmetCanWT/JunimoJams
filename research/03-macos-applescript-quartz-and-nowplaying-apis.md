@@ -44,7 +44,7 @@
    - 6.1 Karar Matrisi (MediaRemote vs AppleScript vs Quartz)
    - 6.2 Olay Güdümlü (Event-Driven) Akış Şeması (Mermaid Sequence Diagram)
    - 6.3 Hata Toleransı ve Çökme Koruması (Fail-Soft Fallback Pipeline)
-7. [Üretime Hazır C# Referans İmplementasyonu (`JunimoJamsRusted`)](#7-üretime-hazır-c-referans-implementasyonu-junimojamsrusted)
+7. [Üretime Hazır C# Referans İmplementasyonu (`JunimoJams`)](#7-üretime-hazır-c-referans-implementasyonu-junimojamsrusted)
    - 7.1 `MacNativeBindings.cs` (Objective-C Runtime, CoreFoundation, MediaRemote, CoreGraphics)
    - 7.2 `MacMediaRemoteListener.cs` (Sıfır IPC, Event-Driven Now Playing Monitor)
    - 7.3 `MacInProcessAppleScript.cs` (Precompiled Script Cache & In-Memory Execution)
@@ -795,9 +795,9 @@ sequenceDiagram
 
 ---
 
-## 7. Üretime Hazır C# Referans İmplementasyonu (`JunimoJamsRusted`)
+## 7. Üretime Hazır C# Referans İmplementasyonu (`JunimoJams`)
 
-Aşağıda `JunimoJamsRusted/Services/Platform/` klasörüne entegre edilmek üzere tasarlanmış, modüler, sıfır GC tahsisli ve tam fonksiyonel 5 temel C# sınıfı yer almaktadır.
+Aşağıda `JunimoJams/Services/Platform/` klasörüne entegre edilmek üzere tasarlanmış, modüler, sıfır GC tahsisli ve tam fonksiyonel 5 temel C# sınıfı yer almaktadır.
 
 ### 7.1 `MacNativeBindings.cs`
 
@@ -805,7 +805,7 @@ Aşağıda `JunimoJamsRusted/Services/Platform/` klasörüne entegre edilmek üz
 using System;
 using System.Runtime.InteropServices;
 
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     [StructLayout(LayoutKind.Sequential)]
     public struct CGPoint
@@ -944,7 +944,7 @@ using System.Runtime.InteropServices;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley;
 
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     public sealed class MacMediaRemoteListener : IDisposable
     {
@@ -1175,7 +1175,7 @@ namespace JunimoJamsRusted.Services.Platform
 using System;
 using System.Collections.Concurrent;
 
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     public static class MacInProcessAppleScript
     {
@@ -1276,7 +1276,7 @@ namespace JunimoJamsRusted.Services.Platform
 using System;
 using System.Threading;
 
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     public static class MacQuartzMediaKeys
     {
@@ -1346,7 +1346,7 @@ namespace JunimoJamsRusted.Services.Platform
 using System;
 using System.Collections.Generic;
 
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     public class MacMusicPlayer : IMusicPlayer, IDisposable
     {
@@ -1546,13 +1546,13 @@ defaults read ~/Library/Application\ Support/com.apple.TCC/TCC.db
 
 Stardew Valley 1.6+ macOS üzerinde Apple Notarization ve Hardened Runtime altında çalıştırılır. Mod DLL dosyası SMAPI tarafından dinamik yüklendiği için (`Assembly.Load`):
 - `MediaRemote.framework` özel bir framework olmasına rağmen macOS App Sandbox dışındaki (Stardew Valley Steam sürümü non-sandboxed çalışır) tüm yerel ikili dosyalar tarafından sorunsuz dinamik bağlanabilir (`dlopen`).
-- Gatekeeper, modun C# DLL dosyalarında doğrudan unmanaged kod çalıştırmasını engellemez; ancak mod ZIP paketleri dağıtılırken dosya üzerinde `com.apple.quarantine` özniteliği bulunmamalıdır (`xattr -d com.apple.quarantine JunimoJamsRusted.dll`).
+- Gatekeeper, modun C# DLL dosyalarında doğrudan unmanaged kod çalıştırmasını engellemez; ancak mod ZIP paketleri dağıtılırken dosya üzerinde `com.apple.quarantine` özniteliği bulunmamalıdır (`xattr -d com.apple.quarantine JunimoJams.dll`).
 
 ---
 
 ## Sonuç ve Mimari Değerlendirme
 
-Bu mimari şartname (`JJR-ARCH-003`), `JunimoJamsRusted` modunun macOS platformundaki tüm yapısal tıkanıklıklarını kalıcı olarak çözüme kavuşturmuştur:
+Bu mimari şartname (`JJR-ARCH-003`), `JunimoJams` modunun macOS platformundaki tüm yapısal tıkanıklıklarını kalıcı olarak çözüme kavuşturmuştur:
 1. **13 Kat Süreç Spawning Yok Edildi:** Oyun döngüsündeki her saniye 10-15 kez çağrılan `osascript` süreci tamamen tarihe karışmıştır.
 2. **0 ms IPC Gecikmesi:** `MediaRemote.framework` C-FFI entegrasyonu sayesinde Kontrol Merkezi düzeyinde anlık, bildirim güdümlü ve sıfır gecikmeli parça takibi sağlanmıştır.
 3. **Albüm Kapakları Desteği:** `CFData` ham bellek akışı doğrudan MonoGame `Texture2D`'ye taşınarak macOS kullanıcılarına zengin görsel deneyim sunulmuştur.

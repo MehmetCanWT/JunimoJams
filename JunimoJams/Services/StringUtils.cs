@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     public static class StringUtils
     {

@@ -1,4 +1,4 @@
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     public interface IMusicPlayer
     {

@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading;
 using StardewModdingAPI;
 
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     public enum MprisCommandType
     {

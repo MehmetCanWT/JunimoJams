@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     public static class StringSimilarity
     {

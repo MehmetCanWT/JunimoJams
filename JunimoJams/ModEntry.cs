@@ -3,15 +3,15 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Xna.Framework.Graphics;
-using JunimoJamsRusted.Services;
-using JunimoJamsRusted.UI;
+using JunimoJams.Services;
+using JunimoJams.UI;
 using Rusted.Smapi.Native;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Menus;
 
-namespace JunimoJamsRusted
+namespace JunimoJams
 {
     public sealed class ModEntry : Mod
     {
@@ -50,11 +50,11 @@ namespace JunimoJamsRusted
                     onStateChangedAction: this.UpdateMusicState
                 );
 
-                this.Monitor.Log("Junimo Jams (RustedUI Edition) initialized successfully!", LogLevel.Info);
+                this.Monitor.Log("Junimo Jams initialized successfully!", LogLevel.Info);
             }
             catch (Exception ex)
             {
-                this.Monitor.Log($"Error initializing Junimo Jams (RustedUI Edition): {ex.Message}", LogLevel.Error);
+                this.Monitor.Log($"Error initializing Junimo Jams: {ex.Message}", LogLevel.Error);
             }
 
             helper.Events.GameLoop.GameLaunched += this.OnGameLaunched;

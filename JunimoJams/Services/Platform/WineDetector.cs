@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     public static class WineDetector
     {

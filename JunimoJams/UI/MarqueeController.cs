@@ -1,6 +1,6 @@
 using System;
 
-namespace JunimoJamsRusted.UI
+namespace JunimoJams.UI
 {
     /// <summary>
     /// Smooth, relaxed back-and-forth marquee text controller.

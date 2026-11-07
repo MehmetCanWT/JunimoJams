@@ -3,14 +3,14 @@ using System.IO;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using JunimoJamsRusted.Services;
+using JunimoJams.Services;
 using Rusted.Smapi.Native;
 using Rusted.Smapi.UI;
 using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Menus;
 
-namespace JunimoJamsRusted.UI
+namespace JunimoJams.UI
 {
     public sealed class RustedMusicMenu : IClickableMenu
     {
@@ -38,7 +38,7 @@ namespace JunimoJamsRusted.UI
             this._onThemeChanged = onThemeChanged;
 
             bool followGlobal = string.Equals(config.Theme, "FollowGlobal", StringComparison.OrdinalIgnoreCase);
-            this._view = new RustedView(ownerModId: "MehmetCanWT.JunimoJamsRusted", useRustedUiTheme: followGlobal);
+            this._view = new RustedView(ownerModId: "MehmetCanWT.JunimoJams", useRustedUiTheme: followGlobal);
             this._view.SoundEnabled = config.EnableUiSounds;
 
             string menuPath = Path.Combine(helper.DirectoryPath, "assets", "ui", "music_menu.html");

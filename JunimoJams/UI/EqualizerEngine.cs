@@ -1,6 +1,6 @@
 using System;
 
-namespace JunimoJamsRusted.UI
+namespace JunimoJams.UI
 {
     public sealed class EqualizerEngine
     {

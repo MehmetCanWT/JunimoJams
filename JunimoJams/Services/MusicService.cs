@@ -1,9 +1,9 @@
 using System;
 using System.Runtime.InteropServices;
-using JunimoJamsRusted.Services.Platform;
+using JunimoJams.Services.Platform;
 using StardewModdingAPI;
 
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     public class MusicService
     {

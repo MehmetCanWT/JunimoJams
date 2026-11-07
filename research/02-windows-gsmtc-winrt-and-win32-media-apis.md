@@ -333,19 +333,19 @@ En resmi ve modern .NET yöntemi, proje dosyasında Target Framework Moniker (TF
 - Tüm `Windows.*` isim alanları doğrudan yerel C# sınıfları gibi derlenir. Ekstra P/Invoke veya COM tanımlarına gerek kalmaz.
 
 #### SMAPI Modu İçin Ölümcül Tehlikesi:
-- SMAPI modları platformlar arasıdır! Linux (SteamOS / Steam Deck) ve macOS kullanıcıları aynı `JunimoJamsRusted.dll` modunu çalıştırır.
+- SMAPI modları platformlar arasıdır! Linux (SteamOS / Steam Deck) ve macOS kullanıcıları aynı `JunimoJams.dll` modunu çalıştırır.
 - Eğer proje `net6.0-windows10.0.x` olarak derlenirse, derlenen derleme (assembly) Linux üzerinde SMAPI tarafından yüklenirken `PlatformNotSupportedException` veya assembly çözümleme hatası verir; Linux/macOS geliştiricileri projeyi `dotnet build` ile derleyemez!
 
 ---
 
 ### 3.3 Yöntem B: CsWinRT ve Dinamik Yüklenen Köprü Kütüphanesi
 
-Bu mimaride, Windows'a özgü WinRT çağrıları ayrı bir küçük projeye (`JunimoJamsRusted.WinRT.dll`) izole edilir.
+Bu mimaride, Windows'a özgü WinRT çağrıları ayrı bir küçük projeye (`JunimoJams.WinRT.dll`) izole edilir.
 
 ```mermaid
 flowchart TD
-    CoreMod["JunimoJamsRusted.dll\n(TargetFramework: net6.0 - Universal)"]
-    Bridge["JunimoJamsRusted.WinRT.dll\n(net6.0-windows10.0.19041.0)"]
+    CoreMod["JunimoJams.dll\n(TargetFramework: net6.0 - Universal)"]
+    Bridge["JunimoJams.WinRT.dll\n(net6.0-windows10.0.19041.0)"]
     Win32Eng["Win32EnumWindowsEngine\n(Saf P/Invoke Fallback)"]
 
     CoreMod -->|"Runtime Platform Check\nOperatingSystem.IsWindowsVersionAtLeast(10, 0, 18362)"| Check{Windows 10+?}
@@ -355,7 +355,7 @@ flowchart TD
 ```
 
 - Ana mod projesi evrensel `net6.0` kalır.
-- Yalnızca Windows 10 Build 18362 ve üzerinde çalışırken yardımcı `JunimoJamsRusted.WinRT.dll` dinamik olarak devreye girer.
+- Yalnızca Windows 10 Build 18362 ve üzerinde çalışırken yardımcı `JunimoJams.WinRT.dll` dinamik olarak devreye girer.
 - Linux ve macOS üzerinde bu DLL asla yüklenmeyeceği için runtime hatası oluşmaz.
 
 ---
@@ -785,7 +785,7 @@ classDiagram
 ### 6.1 `IWindowsMediaTracker` Arayüzü ve `TrackInfo` Veri Modeli
 
 ```csharp
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     public sealed class TrackInfo
     {
@@ -833,7 +833,7 @@ using System.Threading.Tasks;
 using Windows.Media.Control;
 using Windows.Storage.Streams;
 
-namespace JunimoJamsRusted.Services.Platform.WindowsImpl
+namespace JunimoJams.Services.Platform.WindowsImpl
 {
     public sealed class WinRtGsmtcEngine : IWindowsMediaTracker
     {
@@ -1022,7 +1022,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
-namespace JunimoJamsRusted.Services.Platform.WindowsImpl
+namespace JunimoJams.Services.Platform.WindowsImpl
 {
     public sealed class Win32EnumWindowsEngine : IWindowsMediaTracker
     {
@@ -1090,7 +1090,7 @@ namespace JunimoJamsRusted.Services.Platform.WindowsImpl
 ### 6.4 `WindowsMediaEngine`: Hibrit Şeffaf Yönetici
 
 ```csharp
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     public sealed class WindowsMediaEngine : IMusicPlayer, IDisposable
     {
@@ -1193,7 +1193,7 @@ Windows platformunda medya izleme ve kontrolü, Win32 pencere heuristiklerinden 
 
 ### Adım Adım Entegrasyon Planı:
 1. **Faz 1 (Altyapı & Paketleme):**
-   - `JunimoJamsRusted.csproj` dosyasına koşullu Windows SDK derleme referansının eklenmesi.
+   - `JunimoJams.csproj` dosyasına koşullu Windows SDK derleme referansının eklenmesi.
    - `IWindowsMediaTracker` soyutlama katmanının oluşturulması.
 2. **Faz 2 (`WinRtGsmtcEngine` Entegrasyonu):**
    - GSMTC SessionManager, Session ve MediaProperties olaylarının dinlenmesi.

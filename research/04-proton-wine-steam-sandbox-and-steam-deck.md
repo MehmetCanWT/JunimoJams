@@ -133,7 +133,7 @@ Geliştiriciler yerel bir Linux sürümü varken oyuncuların neden oyunu kasıt
    Windows masaüstü bilgisayarında 150 modluk bir klasör oluşturan oyuncular, bu klasörü doğrudan Steam Deck'lerine kopyalarlar. Yerel Linux SMAPI'yi ayrı kurmak ve Linux ikili kütüphanelerini aramak yerine, Steam oyun özelliklerinden *"Force the use of a specific Steam Play compatibility tool -> Proton Experimental"* kutucuğunu işaretleyerek Windows kopyalarını tek tıkla çalıştırırlar.
 
 > [!IMPORTANT]
-> **Mimari İlke**: `JunimoJamsRusted`, kullanıcının oyunu hangi modda çalıştırdığına bakılmaksızın kusursuz çalışmak zorundadır. Oyuncudan *"Lütfen oyunu yerel Linux'ta çalıştırın"* veya *"Proton'u kapatın"* talebinde bulunulamaz.
+> **Mimari İlke**: `JunimoJams`, kullanıcının oyunu hangi modda çalıştırdığına bakılmaksızın kusursuz çalışmak zorundadır. Oyuncudan *"Lütfen oyunu yerel Linux'ta çalıştırın"* veya *"Proton'u kapatın"* talebinde bulunulamaz.
 
 ### 2.3 Dosya Yolu Hiyerarşisi, Dizin Ayrımı ve Ortam Değişkenleri
 
@@ -555,7 +555,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using StardewModdingAPI;
 
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     /// <summary>
     /// Valve Proton ve Wine çalışma zamanını tespit eden, kernel sürümlerini
@@ -669,7 +669,7 @@ using System.Net.Sockets;
 using System.Text;
 using StardewModdingAPI;
 
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     /// <summary>
     /// Proton/Wine içinden Host Linux D-Bus oturumuna doğrudan AF_UNIX soketi
@@ -880,7 +880,7 @@ using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewValley;
 
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     public enum DeckHudPosition
     {
@@ -982,9 +982,9 @@ namespace JunimoJamsRusted.Services
 using System;
 using System.Runtime.InteropServices;
 using StardewModdingAPI;
-using JunimoJamsRusted.Services.Platform;
+using JunimoJams.Services.Platform;
 
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     /// <summary>
     /// Native Linux, Proton/Wine, Windows ve macOS ortamlarını akıllıca

@@ -5,7 +5,7 @@
 > **Tarih:** 2026-11-07  
 > **Yazar:** Lead Music Information Retrieval (MIR) & Metadata Architect  
 > **Hedef Sistem:** Stardew Valley 1.6+ / SMAPI 4.x / MonoGame 3.8+ / RustedUI Native Bridge  
-> **İlişkili Bileşenler:** [`ArtService.cs`](file:///home/mehmetcan/Code/JunimoJamsRusted/JunimoJamsRusted/Services/ArtService.cs), [`TitleNormalizer.cs`](file:///home/mehmetcan/Code/JunimoJamsRusted/JunimoJamsRusted/Services/TitleNormalizer.cs), [`StringSimilarity.cs`](file:///home/mehmetcan/Code/JunimoJamsRusted/JunimoJamsRusted/Services/StringSimilarity.cs), [`LinuxMusicPlayer.cs`](file:///home/mehmetcan/Code/JunimoJamsRusted/JunimoJamsRusted/Services/Platform/LinuxMusicPlayer.cs), [`WindowsMusicPlayer.cs`](file:///home/mehmetcan/Code/JunimoJamsRusted/JunimoJamsRusted/Services/Platform/WindowsMusicPlayer.cs), [`TrackInfo.cs`](file:///home/mehmetcan/Code/JunimoJamsRusted/JunimoJamsRusted/Services/TrackInfo.cs)  
+> **İlişkili Bileşenler:** [`ArtService.cs`](file:///home/mehmetcan/Code/JunimoJams/JunimoJams/Services/ArtService.cs), [`TitleNormalizer.cs`](file:///home/mehmetcan/Code/JunimoJams/JunimoJams/Services/TitleNormalizer.cs), [`StringSimilarity.cs`](file:///home/mehmetcan/Code/JunimoJams/JunimoJams/Services/StringSimilarity.cs), [`LinuxMusicPlayer.cs`](file:///home/mehmetcan/Code/JunimoJams/JunimoJams/Services/Platform/LinuxMusicPlayer.cs), [`WindowsMusicPlayer.cs`](file:///home/mehmetcan/Code/JunimoJams/JunimoJams/Services/Platform/WindowsMusicPlayer.cs), [`TrackInfo.cs`](file:///home/mehmetcan/Code/JunimoJams/JunimoJams/Services/TrackInfo.cs)  
 > **Kapsam:** Çevrimdışı ve çevrimiçi albüm kapağı arama, Apple iTunes Search API, MusicBrainz & Cover Art Archive, Spotify Web API, MPRIS2 / GSMTC doğrudan görsel çıkarma, başlık temizleme regex motoru, Unicode normalizasyonu (NFKD/CJK/Türkçe), dize benzerlik algoritmaları (Jaccard, Levenshtein, Jaro-Winkler, Sørensen-Dice, Fonetik Soundex), çift katmanlı LRU bellek ve atomik disk önbellek mimarisi.
 
 ---
@@ -138,7 +138,7 @@ Apple iTunes Search API, bağımsız ve açık kaynaklı istemci modları için 
   ```http
   GET https://itunes.apple.com/search?term={escaped_query}&entity=song&limit=10 HTTP/1.1
   Host: itunes.apple.com
-  User-Agent: JunimoJamsRusted/1.0 (StardewValleyMod)
+  User-Agent: JunimoJams/1.0 (StardewValleyMod)
   Accept: application/json
   ```
 - **Hız Sınırları (Rate Limiting):** Apple resmi olarak dakikada IP başına yaklaşık **20 istek** sınırı koyduğunu belirtse de, pratikte kısa süreli patlamalara (burst: 10 saniyede 15 istek) izin verir. Sınır aşıldığında sunucu `HTTP 429 Too Many Requests` yanıtı döndürür.
@@ -220,7 +220,7 @@ MusicBrainz üzerinde doğrudan şarkı ve sanatçı adıyla resim aranmaz. İş
    ```http
    GET https://musicbrainz.org/ws/2/recording/?query=recording:"{track}" AND artist:"{artist}"&fmt=json HTTP/1.1
    Host: musicbrainz.org
-   User-Agent: JunimoJamsRusted/1.0 ( https://github.com/... )
+   User-Agent: JunimoJams/1.0 ( https://github.com/... )
    ```
 2. **Release MBID Üzerinden CAA Görseli Alma:**
    Recording nesnesinden ilişkili albümün `release-group` veya `release` MBID'si (UUID formatında) alınır:
@@ -254,7 +254,7 @@ Authorization: Basic Base64(CLIENT_ID:CLIENT_SECRET)
 grant_type=client_credentials
 ```
 Eğer mod geliştiricisi kendi `CLIENT_ID` ve `CLIENT_SECRET` anahtarlarını mod koduna gömerse:
-- C# derlenmiş DLL'leri (`JunimoJamsRusted.dll`), ILSpy veya dnSpy ile 5 saniye içinde decompile edilebilir.
+- C# derlenmiş DLL'leri (`JunimoJams.dll`), ILSpy veya dnSpy ile 5 saniye içinde decompile edilebilir.
 - Sızan kimlik bilgileri kötü niyetli kişilerce suistimal edilerek Spotify Developer kotasının tükenmesine ve uygulamanın tamamen yasaklanmasına (ban) yol açar.
 
 #### 2. Merkezi Ters Proxy (Reverse Proxy) Maliyeti
@@ -760,7 +760,7 @@ Ağ bağlantısı koptuğunda modun sürekli HTTP istekleri yaparak oyunu yavaş
 
 ## 6. Junimo Jams (RustedUI) İçin Eksiksiz C# Kod İmplementasyonu
 
-Aşağıdaki C# kaynak kodları, `JunimoJamsRusted` projesine doğrudan dahil edilmek üzere sıfır uyarı (zero-warning), tam tip güvenliği, thread-safe yapısı ve .NET 6.0 / SMAPI 4.x standartlarında yazılmıştır.
+Aşağıdaki C# kaynak kodları, `JunimoJams` projesine doğrudan dahil edilmek üzere sıfır uyarı (zero-warning), tam tip güvenliği, thread-safe yapısı ve .NET 6.0 / SMAPI 4.x standartlarında yazılmıştır.
 
 ### 6.1 `TitleNormalizer.cs` — Regex Motoru, Unicode Ayrıştırma ve Feat Algılayıcı
 
@@ -771,7 +771,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     /// <summary>
     /// Şarkı ve sanatçı üstverilerini arama motorlarına ve HUD gösterimine
@@ -913,7 +913,7 @@ namespace JunimoJamsRusted.Services
 using System;
 using System.Collections.Generic;
 
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     /// <summary>
     /// Sıfır GC bellek tahsisli, yüksek performanslı dize benzerlik algoritmaları kütüphanesi.
@@ -1129,7 +1129,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     /// <summary>
     /// VRAM sızıntılarını önleyen, sabit boyutlu, deterministik Dispose() mekanizmalı
@@ -1251,7 +1251,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     /// <summary>
     /// Linux MPRIS2 mpris:artUrl veya Windows GSMTC üzerinden sıfır ağ aramasıyla
@@ -1324,7 +1324,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     public class CoverArtResult
     {
@@ -1355,7 +1355,7 @@ namespace JunimoJamsRusted.Services
             {
                 Timeout = TimeSpan.FromSeconds(4.0)
             };
-            this._http.DefaultRequestHeaders.Add("User-Agent", "JunimoJamsRusted/2.0 (StardewValley Mod; +https://github.com)");
+            this._http.DefaultRequestHeaders.Add("User-Agent", "JunimoJams/2.0 (StardewValley Mod; +https://github.com)");
 
             this._cachePath = Path.Combine(modPath, "cache");
             Directory.CreateDirectory(this._cachePath);
@@ -1588,15 +1588,15 @@ namespace JunimoJamsRusted.Services
 
 ### 7.1 `ModEntry.cs` ve `RustedMusicHud.cs` Yaşam Döngüsü Bağlantıları
 
-Önerilen yeni mimari bileşenlerinin var olan `JunimoJamsRusted` yapısına entegrasyonu aşağıdaki prensiplerle gerçekleştirilmelidir:
+Önerilen yeni mimari bileşenlerinin var olan `JunimoJams` yapısına entegrasyonu aşağıdaki prensiplerle gerçekleştirilmelidir:
 
 1. **`TrackInfo` Genişletmesi:**
-   [`TrackInfo.cs`](file:///home/mehmetcan/Code/JunimoJamsRusted/JunimoJamsRusted/Services/TrackInfo.cs) sınıfına platformdan dönen doğrudan görsel URL'sini taşımak için opsiyonel `DirectArtUrl` (`string?`) alanı eklenmelidir:
+   [`TrackInfo.cs`](file:///home/mehmetcan/Code/JunimoJams/JunimoJams/Services/TrackInfo.cs) sınıfına platformdan dönen doğrudan görsel URL'sini taşımak için opsiyonel `DirectArtUrl` (`string?`) alanı eklenmelidir:
    ```csharp
    public string? DirectArtUrl { get; set; }
    ```
 2. **`LinuxMusicPlayer` D-Bus Güncellemesi:**
-   [`LinuxMusicPlayer.cs`](file:///home/mehmetcan/Code/JunimoJamsRusted/JunimoJamsRusted/Services/Platform/LinuxMusicPlayer.cs) içinde `mpris:artUrl` D-Bus özelliği okunarak `TrackInfo.DirectArtUrl` alanına atanmalıdır.
+   [`LinuxMusicPlayer.cs`](file:///home/mehmetcan/Code/JunimoJams/JunimoJams/Services/Platform/LinuxMusicPlayer.cs) içinde `mpris:artUrl` D-Bus özelliği okunarak `TrackInfo.DirectArtUrl` alanına atanmalıdır.
 3. **`ModEntry.cs` Doku Havuzu Entegrasyonu:**
    `ModEntry` sınıfında `Texture2D.FromStream` çağrıları `LruTextureCache` üzerinden yönlendirilmeli ve şarkı değişimlerinde eski dokuların GPU sızıntısı yapmadan LRU mantığıyla temizlenmesi güvence altına alınmalıdır.
 

@@ -1,14 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <AssemblyName>JunimoJamsRusted</AssemblyName>
-    <RootNamespace>JunimoJamsRusted</RootNamespace>
+    <AssemblyName>JunimoJams</AssemblyName>
+    <RootNamespace>JunimoJams</RootNamespace>
     <TargetFramework>net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <ModZipName>$(AssemblyName)</ModZipName>
     <GamePath>/home/mehmetcan/.local/share/Steam/steamapps/common/Stardew Valley</GamePath>
-    <DeployModFolderName>JunimoJamsRusted</DeployModFolderName>
+    <DeployModFolderName>JunimoJams</DeployModFolderName>
   </PropertyGroup>
 
   <ItemGroup>

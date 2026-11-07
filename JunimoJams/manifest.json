@@ -1,0 +1,19 @@
+{
+  "Name": "Junimo Jams",
+  "Author": "MehmetCanWT",
+  "Version": "1.0.0",
+  "Description": "Zero-GC universal music HUD and player hub for Stardew Valley 1.6+, powered by RustedUI. Seamlessly tracks and controls BitChord, Spotify, YouTube Music, Apple Music, TIDAL, VLC, and more across Linux, Proton, Windows, and macOS.",
+  "UniqueID": "MehmetCanWT.JunimoJams",
+  "EntryDll": "JunimoJams.dll",
+  "MinimumApiVersion": "4.1.0",
+  "Dependencies": [
+    {
+      "UniqueID": "Mehmetcan.RustedUI",
+      "IsRequired": true
+    },
+    {
+      "UniqueID": "spacechase0.GenericModConfigMenu",
+      "IsRequired": false
+    }
+  ]
+}

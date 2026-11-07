@@ -4,7 +4,7 @@ using System.IO;
 using System.Net.Sockets;
 using System.Text;
 
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     /// <summary>
     /// Pure C# Zero-Dependency D-Bus Wire Protocol Client.

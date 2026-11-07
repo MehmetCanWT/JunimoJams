@@ -1,8 +1,8 @@
-# 🌿 Junimo Jams (RustedUI Edition)
+# 🌿 Junimo Jams
 
-![Junimo Jams Banner](JunimoJamsRusted/assets/banner.png)
+![Junimo Jams Banner](JunimoJams/assets/banner.png)
 
-**A Blazing-Fast, Zero-GC Universal Music HUD & Player Hub for Stardew Valley 1.6+ (SMAPI 4.1+) Powered by [RustedUI](../Rusted)**
+**A Blazing-Fast, Zero-GC Universal Music HUD & Player Hub for Stardew Valley 1.6+ (SMAPI 4.1+)**
 
 [![Stardew Valley](https://img.shields.io/badge/Stardew_Valley-1.6+-green?logo=stardewvalley)](#)
 [![SMAPI](https://img.shields.io/badge/SMAPI-4.1+-brightgreen)](#)
@@ -71,7 +71,7 @@ It acts as a **Universal Media Hub** that tracks, controls, and displays details
 - **.NET 6.0 SDK**
 
 ### Build Command
-Run the build script to compile and deploy directly to your `Mods/JunimoJamsRusted` folder:
+Run the build script to compile and deploy directly to your `Mods/JunimoJams` folder:
 
 ```bash
 ./build.sh
@@ -82,12 +82,12 @@ Run the build script to compile and deploy directly to your `Mods/JunimoJamsRust
 ## 📁 Repository Structure
 
 ```text
-JunimoJamsRusted/
+JunimoJams/
 ├── build.sh                                     # One-command dotnet build and deploy script
-├── JunimoJamsRusted.sln                         # Visual Studio solution
+├── JunimoJams.sln                         # Visual Studio solution
 ├── README.md                                    # Comprehensive documentation
-└── JunimoJamsRusted/
-    ├── JunimoJamsRusted.csproj                  # C# project with Rusted.Smapi reference
+└── JunimoJams/
+    ├── JunimoJams.csproj                  # C# project with Rusted.Smapi reference
     ├── manifest.json                            # SMAPI manifest with Mehmetcan.RustedUI dependency
     ├── ModConfig.cs                             # Configuration schema
     ├── ModEntry.cs                              # SMAPI lifecycle, polling & event dispatching

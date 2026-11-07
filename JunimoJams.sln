@@ -2,7 +2,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JunimoJamsRusted", "JunimoJamsRusted/JunimoJamsRusted.csproj", "{B8D56A49-4A7B-4B6E-9C8F-72DF3CE46A21}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JunimoJams", "JunimoJams/JunimoJams.csproj", "{B8D56A49-4A7B-4B6E-9C8F-72DF3CE46A21}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

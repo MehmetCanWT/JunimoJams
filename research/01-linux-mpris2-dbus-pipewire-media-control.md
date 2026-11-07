@@ -43,7 +43,7 @@
    - 6.2 W3C Media Session API'nin Linux MPRIS Eşlemesi
    - 6.3 Popüler Platformların Ayrıştırma Nüansları (YouTube Music, SoundCloud, Bandcamp, Plex)
    - 6.4 Başlık ve URL Ayrıştırma Algoritmaları (Regex Heuristics)
-7. [`JunimoJamsRusted` İçin Üretime Hazır C# Mimari Gerçekleştirmesi](#7-junimojamsrusted-için-üretime-hazır-c-mimari-gerçekleştirmesi)
+7. [`JunimoJams` İçin Üretime Hazır C# Mimari Gerçekleştirmesi](#7-junimojamsrusted-için-üretime-hazır-c-mimari-gerçekleştirmesi)
    - 7.1 Genişletilmiş `TrackInfo.cs` Veri Modeli
    - 7.2 Event-Driven D-Bus Sinyal İstemcisi (`LinuxMprisClient.cs`)
    - 7.3 PipeWire / PulseAudio Akış Gözlemcisi (`PipeWireAudioWatcher.cs`)
@@ -60,7 +60,7 @@
 
 ### 1.1 Mevcut `LinuxMusicPlayer.cs` Tasarımının Teşhisi ve "Subprocess Fork Hell" Faciası
 
-Junimo Jams (RustedUI Edition) projesinin temel varlık sebebi; arayüz katmanındaki managed heap tahsislerini sıfırlamak (**Zero-GC**), render gecikmesini mikro-saniyeler seviyesine indirmek ve oyuncuya kusursuz bir 60+ FPS deneyimi sunmaktır. Ancak modun mevcut Linux platform gerçeklemesi (`JunimoJamsRusted/Services/Platform/LinuxMusicPlayer.cs`) incelendiğinde, arayüzdeki bu kazanımları taban işletim sistemi düzeyinde tamamen baltalayan kritik bir mimari anti-pattern tespit edilmiştir.
+Junimo Jams (RustedUI Edition) projesinin temel varlık sebebi; arayüz katmanındaki managed heap tahsislerini sıfırlamak (**Zero-GC**), render gecikmesini mikro-saniyeler seviyesine indirmek ve oyuncuya kusursuz bir 60+ FPS deneyimi sunmaktır. Ancak modun mevcut Linux platform gerçeklemesi (`JunimoJams/Services/Platform/LinuxMusicPlayer.cs`) incelendiğinde, arayüzdeki bu kazanımları taban işletim sistemi düzeyinde tamamen baltalayan kritik bir mimari anti-pattern tespit edilmiştir.
 
 Mevcut implementasyon, aktif parçayı ve durumunu belirlemek için her kontrol periyodunda işletim sisteminde harici kabuk işlemleri (`dbus-send`) çatallamaktadır (fork-exec):
 
@@ -212,7 +212,7 @@ Junimo Jams'in müzik denetimi için etkileşime girdiği asıl oynatma motoru a
 
 `org.mpris.MediaPlayer2.Player` üzerindeki en kritik özellik `Metadata` sözlüğüdür. Bu özellik D-Bus üzerinde `a{sv}` (String anahtarlar ve Variant değerlerden oluşan Dictionary) tipindedir. Alan adları **XESAM (Extensible Source and Asset Media)** ontolojisini takip eder.
 
-Aşağıdaki tablo, `JunimoJamsRusted` tarafından tüketilen alanların teknik özelliklerini ve Linux dünyasındaki uygulama farklılıklarını listeler:
+Aşağıdaki tablo, `JunimoJams` tarafından tüketilen alanların teknik özelliklerini ve Linux dünyasındaki uygulama farklılıklarını listeler:
 
 | Metadata Anahtarı | Tip / İmza | Anlamı ve Birimi | Gerçek Dünya Tuzakları & Edge Case Analizi |
 |---|:---:|---|---|
@@ -687,7 +687,7 @@ public static class TrackTitleParser
 
 ---
 
-## 7. `JunimoJamsRusted` İçin Üretime Hazır C# Mimari Gerçekleştirmesi
+## 7. `JunimoJams` İçin Üretime Hazır C# Mimari Gerçekleştirmesi
 
 Bu bölümde, Junimo Jams modunun Linux platform alt yapısını baştan aşağı modernleştiren, drop-in olarak kullanıma hazır C# kaynak kodları sunulmaktadır.
 
@@ -699,7 +699,7 @@ Mevcut minimal `TrackInfo` sınıfı, MPRIS 2.2 ve RustedUI bileşenlerinin ihti
 using System;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     public class TrackInfo : IDisposable
     {
@@ -766,7 +766,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     /// <summary>
     /// Linux D-Bus oturum veriyolunda çalışan MPRIS2 medya oynatıcılarını 
@@ -1151,7 +1151,7 @@ using System;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     public sealed class PipeWireAudioWatcher
     {
@@ -1228,7 +1228,7 @@ Artık her saniye `fork-exec` yapmayan, sinyalleri önbelleğe alan ve gerektiğ
 ```csharp
 using System;
 
-namespace JunimoJamsRusted.Services.Platform
+namespace JunimoJams.Services.Platform
 {
     public sealed class LinuxMusicPlayer : IMusicPlayer, IDisposable
     {

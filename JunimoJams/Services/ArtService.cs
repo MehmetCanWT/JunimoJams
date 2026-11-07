@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     public sealed class CoverArtResult
     {
@@ -36,7 +36,7 @@ namespace JunimoJamsRusted.Services
             {
                 Timeout = TimeSpan.FromSeconds(4.0)
             };
-            this._http.DefaultRequestHeaders.Add("User-Agent", "JunimoJamsRusted/2.0 (StardewValley-SMAPI; +https://github.com/MehmetCanWT)");
+            this._http.DefaultRequestHeaders.Add("User-Agent", "JunimoJams/2.0 (StardewValley-SMAPI; +https://github.com/MehmetCanWT)");
 
             this._cachePath = Path.Combine(modPath, "cache");
             Directory.CreateDirectory(this._cachePath);

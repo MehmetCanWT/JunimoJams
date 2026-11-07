@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     public sealed class LruTextureCache : IDisposable
     {

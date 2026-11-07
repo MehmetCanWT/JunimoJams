@@ -1,7 +1,7 @@
 using System;
 using StardewModdingAPI.Utilities;
 
-namespace JunimoJamsRusted
+namespace JunimoJams
 {
     public sealed class ModConfig
     {

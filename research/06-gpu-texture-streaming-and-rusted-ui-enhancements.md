@@ -338,7 +338,7 @@ Modern UI design often utilizes rounded corners (e.g., `rounded-lg` or `border-r
 
 ### 4.2 CPU Distance Field Carving: Latency, Allocations, and Cache Eviction
 
-In `JunimoJamsRusted/UI/RustedMusicHud.cs`, the initial implementation used CPU circular distance masking:
+In `JunimoJams/UI/RustedMusicHud.cs`, the initial implementation used CPU circular distance masking:
 ```csharp
 // Current implementation in RustedMusicHud.cs
 private Texture2D BuildRoundedTexture(Texture2D source, int w, int h, int radius)
@@ -594,7 +594,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley;
 
-namespace JunimoJamsRusted.Services
+namespace JunimoJams.Services
 {
     public sealed class PendingArtPayload
     {
@@ -733,7 +733,7 @@ using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace JunimoJamsRusted.UI
+namespace JunimoJams.UI
 {
     public sealed class MarqueeController
     {
@@ -809,7 +809,7 @@ namespace JunimoJamsRusted.UI
 ```csharp
 using System;
 
-namespace JunimoJamsRusted.UI
+namespace JunimoJams.UI
 {
     public sealed class EqualizerEngine
     {
@@ -855,7 +855,7 @@ using System;
 using Microsoft.Xna.Framework;
 using StardewValley;
 
-namespace JunimoJamsRusted.UI
+namespace JunimoJams.UI
 {
     public enum HudAnchor
     {

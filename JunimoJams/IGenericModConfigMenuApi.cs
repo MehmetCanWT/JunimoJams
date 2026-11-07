@@ -2,7 +2,7 @@ using System;
 using StardewModdingAPI;
 using StardewModdingAPI.Utilities;
 
-namespace JunimoJamsRusted
+namespace JunimoJams
 {
     public interface IGenericModConfigMenuApi
     {

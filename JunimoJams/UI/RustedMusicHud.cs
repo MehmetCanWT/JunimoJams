@@ -2,11 +2,11 @@ using System;
 using System.IO;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using JunimoJamsRusted.Services;
+using JunimoJams.Services;
 using StardewModdingAPI;
 using StardewValley;
 
-namespace JunimoJamsRusted.UI
+namespace JunimoJams.UI
 {
     public struct HudThemeColors
     {
