@@ -2,6 +2,10 @@ using System;
 
 namespace JunimoJamsRusted.UI
 {
+    /// <summary>
+    /// Smooth, relaxed back-and-forth marquee text controller.
+    /// Provides comfortable readability with generous pauses at endpoints.
+    /// </summary>
     public sealed class MarqueeController
     {
         private string _text = string.Empty;
@@ -9,7 +13,13 @@ namespace JunimoJamsRusted.UI
         private int _offset = 0;
         private int _direction = 1;
         private int _pauseTimer = 0;
-        private const int PAUSE_TICKS = 45; // ~0.75 seconds pause at endpoints
+        private int _stepTimer = 0;
+
+        // ~1.6 seconds pause at start and end for relaxed reading
+        private const int PAUSE_TICKS = 100;
+
+        // Advance 1 character every 14 game ticks (~4.3 characters per second at 60 FPS)
+        private int _stepDelay = 14;
 
         public string Text
         {
@@ -22,6 +32,7 @@ namespace JunimoJamsRusted.UI
                     this._offset = 0;
                     this._direction = 1;
                     this._pauseTimer = PAUSE_TICKS;
+                    this._stepTimer = 0;
                 }
             }
         }
@@ -30,6 +41,12 @@ namespace JunimoJamsRusted.UI
         {
             get => this._maxVisibleChars;
             set => this._maxVisibleChars = Math.Max(6, value);
+        }
+
+        public int StepDelay
+        {
+            get => this._stepDelay;
+            set => this._stepDelay = Math.Max(4, value);
         }
 
         public void Update()
@@ -46,6 +63,11 @@ namespace JunimoJamsRusted.UI
                 return;
             }
 
+            this._stepTimer++;
+            if (this._stepTimer < this._stepDelay)
+                return;
+
+            this._stepTimer = 0;
             int maxOffset = this._text.Length - this._maxVisibleChars;
 
             this._offset += this._direction;
