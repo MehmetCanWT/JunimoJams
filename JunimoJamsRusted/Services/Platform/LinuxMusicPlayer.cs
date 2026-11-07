@@ -60,17 +60,43 @@ namespace JunimoJamsRusted.Services.Platform
 
             string metadata = this.RunPlayerCommand(player, "org.freedesktop.DBus.Properties.Get string:'org.mpris.MediaPlayer2.Player' string:'Metadata'");
             string status = this.RunPlayerCommand(player, "org.freedesktop.DBus.Properties.Get string:'org.mpris.MediaPlayer2.Player' string:'PlaybackStatus'");
-            
+            string posOutput = this.RunPlayerCommand(player, "org.freedesktop.DBus.Properties.Get string:'org.mpris.MediaPlayer2.Player' string:'Position'");
+
             bool isPlaying = status.Contains("Playing");
             string artist = this.ParseDbusMetadata(metadata, "xesam:artist");
             string title = this.ParseDbusMetadata(metadata, "xesam:title");
+            string album = this.ParseDbusMetadata(metadata, "xesam:album");
+            string artUrl = this.ParseDbusMetadata(metadata, "mpris:artUrl");
 
-            return new TrackInfo
+            // Parse track length in microseconds (mpris:length int64)
+            TimeSpan duration = TimeSpan.Zero;
+            string lengthStr = this.ParseDbusInt64(metadata, "mpris:length");
+            if (long.TryParse(lengthStr, out long lengthMicrosec) && lengthMicrosec > 0)
+            {
+                duration = TimeSpan.FromMilliseconds(lengthMicrosec / 1000.0);
+            }
+
+            // Parse position in microseconds
+            TimeSpan position = TimeSpan.Zero;
+            if (long.TryParse(this.ExtractVariantInt64(posOutput), out long posMicrosec) && posMicrosec > 0)
+            {
+                position = TimeSpan.FromMilliseconds(posMicrosec / 1000.0);
+            }
+
+            var track = new TrackInfo
             {
                 Name = string.IsNullOrEmpty(title) ? "Unknown" : title,
                 Artist = string.IsNullOrEmpty(artist) ? "Unknown" : artist,
-                IsPlaying = isPlaying
+                Album = album,
+                IsPlaying = isPlaying,
+                Duration = duration,
+                Position = position,
+                PlaybackRate = isPlaying ? 1.0f : 0.0f,
+                LastPositionUpdateTime = DateTime.UtcNow,
+                DirectArtUri = !string.IsNullOrEmpty(artUrl) ? artUrl : null
             };
+
+            return track;
         }
 
         public void NextTrack() => this.SendPlayerMethod("Next");
@@ -91,7 +117,7 @@ namespace JunimoJamsRusted.Services.Platform
                     return $"org.mpris.MediaPlayer2.{p}";
             }
 
-            // Fallback to first MPRIS2 player found
+            // Fallback to first MPRIS2 player found (e.g. browser instances: org.mpris.MediaPlayer2.chromium.instance...)
             var fallback = lines.FirstOrDefault(l => l.Contains("org.mpris.MediaPlayer2."));
             if (fallback != null)
             {
@@ -185,8 +211,52 @@ namespace JunimoJamsRusted.Services.Platform
             }
             catch
             {
-                // Ignore
+                // Suppress
             }
+            return "";
+        }
+
+        private string ParseDbusInt64(string output, string key)
+        {
+            try
+            {
+                int keyIndex = output.IndexOf(key);
+                if (keyIndex == -1)
+                    return "";
+
+                string afterKey = output.Substring(keyIndex);
+                int int64Index = afterKey.IndexOf("int64");
+                if (int64Index != -1)
+                {
+                    string rest = afterKey.Substring(int64Index + 5).Trim();
+                    int endLine = rest.IndexOfAny(new[] { '\n', '\r', ' ' });
+                    if (endLine > 0)
+                        return rest.Substring(0, endLine).Trim();
+                    return rest;
+                }
+            }
+            catch
+            {
+                // Suppress
+            }
+            return "";
+        }
+
+        private string ExtractVariantInt64(string output)
+        {
+            try
+            {
+                int int64Idx = output.IndexOf("int64");
+                if (int64Idx != -1)
+                {
+                    string rest = output.Substring(int64Idx + 5).Trim();
+                    int endLine = rest.IndexOfAny(new[] { '\n', '\r', ' ' });
+                    if (endLine > 0)
+                        return rest.Substring(0, endLine).Trim();
+                    return rest;
+                }
+            }
+            catch {}
             return "";
         }
     }

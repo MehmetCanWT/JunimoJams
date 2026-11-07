@@ -17,11 +17,19 @@
                     <icon name="zap" class="lucide-icon lucide-md" />
                     <span class="font-dialogue text-sdv-brown">Now Playing</span>
                 </div>
-                <badge id="menu_status_badge" variant="primary" class="sdv-badge badge-primary">Playing</badge>
+                <div class="flex flex-row items-center gap-2">
+                    <span id="menu_time" class="font-tiny text-sdv-muted">0:00 / 0:00</span>
+                    <badge id="menu_status_badge" variant="primary" class="sdv-badge badge-primary">Playing</badge>
+                </div>
             </div>
             <span id="menu_track_title" class="font-dialogue text-sdv-brown shadow">No Track Playing</span>
             <span id="menu_track_artist" class="font-small text-sdv-dark">Start Spotify, YouTube Music, or desktop player</span>
-            
+
+            <!-- Track Timeline Progress Bar -->
+            <div class="w-full py-1">
+                <progress-bar id="menu_progress_bar" value="0" max="100" class="w-full h-4 sdv-bar" />
+            </div>
+
             <!-- Controls Row -->
             <div class="flex flex-row items-center justify-center gap-4 w-full pt-2">
                 <button id="btn_menu_prev" class="sdv-btn px-4" on:click="prev" tooltip="Previous Track">|&lt; Prev</button>

@@ -9,8 +9,41 @@ namespace JunimoJamsRusted.Services.Platform
 {
     public class WindowsMusicPlayer : IMusicPlayer
     {
-        [DllImport("user32.dll")]
-        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
+        [StructLayout(LayoutKind.Sequential)]
+        private struct INPUT
+        {
+            public uint type;
+            public InputUnion u;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        private struct InputUnion
+        {
+            [FieldOffset(0)]
+            public KEYBDINPUT ki;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct KEYBDINPUT
+        {
+            public ushort wVk;
+            public ushort wScan;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        private const uint INPUT_KEYBOARD = 1;
+        private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
+        private const uint KEYEVENTF_KEYUP = 0x0002;
+
+        private const ushort VK_MEDIA_NEXT_TRACK = 0xB0;
+        private const ushort VK_MEDIA_PREV_TRACK = 0xB1;
+        private const ushort VK_MEDIA_STOP = 0xB2;
+        private const ushort VK_MEDIA_PLAY_PAUSE = 0xB3;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint SendInput(uint nInputs, [MarshalAs(UnmanagedType.LPArray), In] INPUT[] pInputs, int cbSize);
 
         [DllImport("user32.dll")]
         private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
@@ -25,12 +58,6 @@ namespace JunimoJamsRusted.Services.Platform
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-        private const byte VK_MEDIA_NEXT_TRACK = 176;
-        private const byte VK_MEDIA_PREV_TRACK = 177;
-        private const byte VK_MEDIA_PLAY_PAUSE = 179;
-        private const uint KEYEVENTF_EXTENDEDKEY = 1;
-        private const uint KEYEVENTF_KEYUP = 2;
 
         private readonly string[] _playerProcessNames;
 
@@ -99,6 +126,7 @@ namespace JunimoJamsRusted.Services.Platform
         {
             try
             {
+                // Check YouTube Music (browser-based) first
                 var ytTrack = this.GetYouTubeMusicTrack();
                 if (ytTrack != null)
                     return ytTrack;
@@ -186,9 +214,9 @@ namespace JunimoJamsRusted.Services.Platform
             return null;
         }
 
-        public void NextTrack() => this.PressKey(VK_MEDIA_NEXT_TRACK);
-        public void PreviousTrack() => this.PressKey(VK_MEDIA_PREV_TRACK);
-        public void TogglePlayPause() => this.PressKey(VK_MEDIA_PLAY_PAUSE);
+        public void NextTrack() => this.SendMediaKey(VK_MEDIA_NEXT_TRACK);
+        public void PreviousTrack() => this.SendMediaKey(VK_MEDIA_PREV_TRACK);
+        public void TogglePlayPause() => this.SendMediaKey(VK_MEDIA_PLAY_PAUSE);
 
         private Process? GetActivePlayerProcess()
         {
@@ -208,10 +236,45 @@ namespace JunimoJamsRusted.Services.Platform
             return null;
         }
 
-        private void PressKey(byte key)
+        private void SendMediaKey(ushort vkCode)
         {
-            keybd_event(key, 0, KEYEVENTF_EXTENDEDKEY, 0);
-            keybd_event(key, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+            INPUT[] inputs = new INPUT[2];
+
+            // Key Down
+            inputs[0] = new INPUT
+            {
+                type = INPUT_KEYBOARD,
+                u = new InputUnion
+                {
+                    ki = new KEYBDINPUT
+                    {
+                        wVk = vkCode,
+                        wScan = 0,
+                        dwFlags = KEYEVENTF_EXTENDEDKEY,
+                        time = 0,
+                        dwExtraInfo = IntPtr.Zero
+                    }
+                }
+            };
+
+            // Key Up
+            inputs[1] = new INPUT
+            {
+                type = INPUT_KEYBOARD,
+                u = new InputUnion
+                {
+                    ki = new KEYBDINPUT
+                    {
+                        wVk = vkCode,
+                        wScan = 0,
+                        dwFlags = KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP,
+                        time = 0,
+                        dwExtraInfo = IntPtr.Zero
+                    }
+                }
+            };
+
+            SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
         }
     }
 }

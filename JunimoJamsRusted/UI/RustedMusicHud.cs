@@ -19,8 +19,13 @@ namespace JunimoJamsRusted.UI
         private readonly Action _onStateChangedAction;
 
         private RustedView? _view;
+        private readonly LruTextureCache _textureCache = new(capacity: 30);
+        private readonly MarqueeController _titleMarquee = new() { MaxVisibleChars = 22 };
+        private readonly MarqueeController _artistMarquee = new() { MaxVisibleChars = 28 };
+
         private Texture2D? _roundedArtCache;
-        private string _roundedArtCacheKey = "";
+        private string _roundedArtCacheKey = string.Empty;
+        private TrackInfo _lastTrack = new();
 
         public RustedMusicHud(
             ModConfig config,
@@ -88,20 +93,26 @@ namespace JunimoJamsRusted.UI
 
             this._view.BuildWithFluent(ui =>
                 ui.Div("w-full h-full flex flex-col justify-start items-start p-4").Children(
-                    ui.Div("flex flex-row items-center w-400 h-auto sdv-box p-3 gap-3").Id("music_card").Children(
+                    ui.Div("flex flex-row items-center w-440 h-auto sdv-box p-3 gap-3").Id("music_card").Children(
                         ui.Div("w-20 h-20 shrink-0 flex items-center justify-center sdv-panel").Id("album_art_slot").Children(
                             ui.Icon("sparkles", "lucide-icon lucide-lg")
                         ),
                         ui.Div("flex flex-col flex-1 gap-1 min-w-0").Children(
                             ui.Div("flex flex-row items-center justify-between w-full").Children(
                                 ui.Badge("Idle", "badge-secondary", "sdv-badge").Id("hud_badge"),
-                                ui.Div("flex flex-row items-center gap-1 shrink-0").Children(
-                                    ui.Icon("zap", "lucide-icon lucide-sm"),
-                                    ui.Text("Hub [F6]", "font-tiny text-sdv-muted").Id("hud_source")
+                                ui.Div("flex flex-row items-center gap-2 shrink-0").Children(
+                                    ui.Text("0:00 / 0:00", "font-tiny text-sdv-muted").Id("hud_time"),
+                                    ui.Div("flex flex-row items-center gap-1 shrink-0").Children(
+                                        ui.Icon("zap", "lucide-icon lucide-sm"),
+                                        ui.Text("Hub [F6]", "font-tiny text-sdv-muted").Id("hud_source")
+                                    )
                                 )
                             ),
                             ui.Title("Not Running", "font-dialogue text-sdv-brown shadow").Id("track_title"),
                             ui.Text("Start Spotify or YouTube Music", "font-small text-sdv-dark").Id("track_artist"),
+                            ui.Div("w-full py-1").Id("progress_row").Children(
+                                ui.ProgressBar("hud_progress_bar", 0f, 100f, "w-full h-3")
+                            ),
                             ui.Div("flex flex-row items-center justify-between w-full pt-1").Id("controls_row").Children(
                                 ui.ArrowLeft("btn_prev", "prev"),
                                 ui.Button("btn_playpause", "Play", "playpause", "px-4"),
@@ -137,7 +148,7 @@ namespace JunimoJamsRusted.UI
                 "Dracula" => UiThemeId.Dracula,
                 "Nord" => UiThemeId.Nord,
                 "Cyberpunk" => UiThemeId.Cyberpunk,
-                _ => UiThemeId.JunimoForest // Default to Junimo Forest!
+                _ => UiThemeId.JunimoForest
             };
 
             this._view.SetTheme(themeId);
@@ -145,13 +156,20 @@ namespace JunimoJamsRusted.UI
 
         public void UpdateTrack(TrackInfo track)
         {
+            this._lastTrack = track;
             if (this._view == null) return;
 
             string normTitle = StringUtils.NormalizeForHud(track.Name);
             string normArtist = StringUtils.NormalizeForHud(track.Artist);
 
-            this._view.SetText("track_title", normTitle);
-            this._view.SetText("track_artist", normArtist);
+            this._titleMarquee.Text = normTitle;
+            this._artistMarquee.Text = normArtist;
+
+            string displayTitle = this._config.EnableMarqueeText ? this._titleMarquee.GetVisibleText() : normTitle;
+            string displayArtist = this._config.EnableMarqueeText ? this._artistMarquee.GetVisibleText() : normArtist;
+
+            this._view.SetText("track_title", displayTitle);
+            this._view.SetText("track_artist", displayArtist);
             this._view.SetTooltip("track_title", $"{normArtist} - {normTitle}");
 
             string status = track.IsPlaying ? "Playing" : (track.Name == "Not Running" ? "Idle" : "Paused");
@@ -163,6 +181,55 @@ namespace JunimoJamsRusted.UI
 
             this._view.SetVisible("controls_row", this._config.ShowPlaybackButtons);
             this._view.SetVisible("album_art_slot", this._config.ShowAlbumArt);
+            this._view.SetVisible("progress_row", this._config.ShowProgressBar && track.Duration > TimeSpan.Zero);
+
+            this.UpdateTimelineDisplay(track);
+        }
+
+        public void UpdatePerTickAnimations()
+        {
+            if (this._view == null || this._lastTrack.Name == "Not Running")
+                return;
+
+            // Update Marquee scrolling
+            if (this._config.EnableMarqueeText)
+            {
+                this._titleMarquee.Update();
+                this._artistMarquee.Update();
+                this._view.SetText("track_title", this._titleMarquee.GetVisibleText());
+                this._view.SetText("track_artist", this._artistMarquee.GetVisibleText());
+            }
+
+            // Update Timeline linear interpolation
+            this.UpdateTimelineDisplay(this._lastTrack);
+        }
+
+        private void UpdateTimelineDisplay(TrackInfo track)
+        {
+            if (this._view == null) return;
+
+            if (track.Duration > TimeSpan.Zero)
+            {
+                TimeSpan currentPos = track.GetExtrapolatedPosition();
+                float percent = (float)(currentPos.TotalSeconds / track.Duration.TotalSeconds) * 100f;
+                this._view.SetProgress("hud_progress_bar", Math.Clamp(percent, 0f, 100f), 100f);
+
+                string curStr = FormatTime(currentPos);
+                string durStr = FormatTime(track.Duration);
+                this._view.SetText("hud_time", $"{curStr} / {durStr}");
+            }
+            else
+            {
+                this._view.SetProgress("hud_progress_bar", 0f, 100f);
+                this._view.SetText("hud_time", "0:00 / 0:00");
+            }
+        }
+
+        private static string FormatTime(TimeSpan span)
+        {
+            if (span.TotalHours >= 1.0)
+                return $"{(int)span.TotalHours}:{span.Minutes:D2}:{span.Seconds:D2}";
+            return $"{span.Minutes}:{span.Seconds:D2}";
         }
 
         public bool UpdateInput(float mouseX, float mouseY, bool leftMouseDown)
@@ -181,8 +248,6 @@ namespace JunimoJamsRusted.UI
             // Overlay High-Resolution Rounded Album Art if available
             if (this._config.ShowAlbumArt && track.CoverArt != null && !track.CoverArt.IsDisposed)
             {
-                // In music_hud.html:
-                // card padding = 24px (sdv-box), slot = 80x80 (w-20, h-20)
                 int artX = this._config.HudPositionX + 24;
                 int artY = this._config.HudPositionY + 24;
                 Rectangle destRect = new Rectangle(artX, artY, 80, 80);
@@ -216,6 +281,7 @@ namespace JunimoJamsRusted.UI
             float sx = (float)source.Width / w;
             float sy = (float)source.Height / h;
 
+            // Fast box downsampling
             for (int y = 0; y < h; y++)
             {
                 for (int x = 0; x < w; x++)
@@ -253,6 +319,8 @@ namespace JunimoJamsRusted.UI
 
             this._roundedArtCache?.Dispose();
             this._roundedArtCache = null;
+
+            this._textureCache.Dispose();
         }
     }
 }

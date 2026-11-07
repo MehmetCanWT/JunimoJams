@@ -21,12 +21,12 @@ namespace JunimoJamsRusted
         private RustedMusicHud _hud = null!;
 
         private TrackInfo _currentTrack = new();
-        private string _lastArtKey = "";
+        private string _lastArtKey = string.Empty;
         private int _checkInterval = 60;
         private int _checkTimer = 0;
 
         private byte[]? _pendingArtBytes;
-        private string _pendingArtTrackKey = "";
+        private string _pendingArtTrackKey = string.Empty;
         private string? _pendingRealArtist;
         private readonly object _artLock = new();
         private CancellationTokenSource? _artCts;
@@ -91,6 +91,8 @@ namespace JunimoJamsRusted
             configMenu.AddBoolOption(this.ModManifest, () => this._config.EnableUiSounds, v => { this._config.EnableUiSounds = v; this._hud.ApplyConfigTheme(); }, () => "UI Sound Effects", () => "Enable audio feedback on button clicks");
             configMenu.AddBoolOption(this.ModManifest, () => this._config.ShowAlbumArt, v => this._config.ShowAlbumArt = v, () => "Show Album Cover", () => "Toggle album art visibility");
             configMenu.AddBoolOption(this.ModManifest, () => this._config.ShowPlaybackButtons, v => this._config.ShowPlaybackButtons = v, () => "Show Buttons", () => "Toggle playback controls visibility");
+            configMenu.AddBoolOption(this.ModManifest, () => this._config.ShowProgressBar, v => this._config.ShowProgressBar = v, () => "Show Timeline Bar", () => "Toggle track progress bar");
+            configMenu.AddBoolOption(this.ModManifest, () => this._config.EnableMarqueeText, v => this._config.EnableMarqueeText = v, () => "Marquee Scrolling", () => "Smoothly scroll long song and artist titles");
             configMenu.AddBoolOption(this.ModManifest, () => this._config.OnlyShowInInventory, v => this._config.OnlyShowInInventory = v, () => "Only In Menu", () => "Show only when inventory open");
             configMenu.AddBoolOption(this.ModManifest, () => this._config.HideOnMap, v => this._config.HideOnMap = v, () => "Hide On Map", () => "Hide when map or overlay menus are open");
 
@@ -134,6 +136,9 @@ namespace JunimoJamsRusted
         {
             if (!this._config.ShowHud)
                 return;
+
+            // Per-tick animation updates: marquee scrolling + linear timeline extrapolation
+            this._hud.UpdatePerTickAnimations();
 
             // Update mouse input on HUD when in gameplay to support live tooltips and hover effects
             if (Game1.activeClickableMenu == null && this.IsHudVisible())
@@ -204,7 +209,7 @@ namespace JunimoJamsRusted
             {
                 try
                 {
-                    var result = await this._artService.FetchCoverArtBytes(track.Artist, track.Name, token);
+                    var result = await this._artService.FetchCoverArtBytes(track, token);
                     if (result?.Bytes != null && result.Bytes.Length > 0)
                     {
                         lock (this._artLock)
@@ -372,12 +377,12 @@ namespace JunimoJamsRusted
 
             this._currentTrack?.Dispose();
             this._currentTrack = new TrackInfo();
-            this._lastArtKey = "";
+            this._lastArtKey = string.Empty;
 
             lock (this._artLock)
             {
                 this._pendingArtBytes = null;
-                this._pendingArtTrackKey = "";
+                this._pendingArtTrackKey = string.Empty;
             }
         }
 

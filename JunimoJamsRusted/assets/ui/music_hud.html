@@ -1,25 +1,33 @@
-<!-- Junimo Jams (RustedUI Edition) - Zero-GC Music HUD Overlay -->
+<!-- Junimo Jams (RustedUI Edition) - Zero-GC Universal Music HUD Overlay -->
 <div class="w-full h-full flex flex-col justify-start items-start p-4">
-    <div id="music_card" class="flex flex-row items-center w-400 h-auto sdv-box p-3 gap-3" tooltip="Junimo Jams (RustedUI Edition)">
-        <!-- Album Art / Vinyl Placeholder -->
+    <div id="music_card" class="flex flex-row items-center w-440 h-auto sdv-box p-3 gap-3" tooltip="Junimo Jams (RustedUI Edition)">
+        <!-- Album Art / Vinyl Frame -->
         <div id="album_art_slot" class="w-20 h-20 shrink-0 flex items-center justify-center sdv-panel" tooltip="Album Cover Art">
             <icon name="sparkles" class="lucide-icon lucide-lg" />
         </div>
 
         <!-- Track Info & Controls -->
         <div class="flex flex-col flex-1 gap-1 min-w-0">
-            <!-- Header: Status Badge & Music Hub shortcut -->
+            <!-- Header: Status Badge & Dynamic Time / Hub Shortcut -->
             <div class="flex flex-row items-center justify-between w-full">
                 <badge id="hud_badge" variant="secondary" class="sdv-badge badge-secondary">Idle</badge>
-                <div class="flex flex-row items-center gap-1 shrink-0" on:click="open_menu" tooltip="Open Music Hub [F6]">
-                    <icon name="zap" class="lucide-icon lucide-sm" />
-                    <span id="hud_source" class="font-tiny text-sdv-muted">Hub [F6]</span>
+                <div class="flex flex-row items-center gap-2 shrink-0">
+                    <span id="hud_time" class="font-tiny text-sdv-muted">0:00 / 0:00</span>
+                    <div class="flex flex-row items-center gap-1 shrink-0" on:click="open_menu" tooltip="Open Music Hub [F6]">
+                        <icon name="zap" class="lucide-icon lucide-sm" />
+                        <span id="hud_source" class="font-tiny text-sdv-muted">Hub [F6]</span>
+                    </div>
                 </div>
             </div>
 
-            <!-- Title & Artist -->
+            <!-- Title & Artist (Supports Ping-Pong Marquee Scrolling) -->
             <span id="track_title" class="font-dialogue text-sdv-brown shadow">Not Running</span>
             <span id="track_artist" class="font-small text-sdv-dark">Start Spotify or YouTube Music</span>
+
+            <!-- Progress Bar (Extrapolated in Real-Time at 0 IPC) -->
+            <div id="progress_row" class="w-full py-1">
+                <progress-bar id="hud_progress_bar" value="0" max="100" class="w-full h-3 sdv-bar" />
+            </div>
 
             <!-- Controls Row -->
             <div id="controls_row" class="flex flex-row items-center justify-between w-full pt-1">

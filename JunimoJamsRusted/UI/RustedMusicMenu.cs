@@ -143,6 +143,29 @@ namespace JunimoJamsRusted.UI
 
             string btnLabel = track.IsPlaying ? "Pause" : "Play";
             this._view.SetText("btn_menu_playpause", btnLabel);
+
+            if (track.Duration > TimeSpan.Zero)
+            {
+                TimeSpan currentPos = track.GetExtrapolatedPosition();
+                float percent = (float)(currentPos.TotalSeconds / track.Duration.TotalSeconds) * 100f;
+                this._view.SetProgress("menu_progress_bar", Math.Clamp(percent, 0f, 100f), 100f);
+
+                string curStr = FormatTime(currentPos);
+                string durStr = FormatTime(track.Duration);
+                this._view.SetText("menu_time", $"{curStr} / {durStr}");
+            }
+            else
+            {
+                this._view.SetProgress("menu_progress_bar", 0f, 100f);
+                this._view.SetText("menu_time", "0:00 / 0:00");
+            }
+        }
+
+        private static string FormatTime(TimeSpan span)
+        {
+            if (span.TotalHours >= 1.0)
+                return $"{(int)span.TotalHours}:{span.Minutes:D2}:{span.Seconds:D2}";
+            return $"{span.Minutes}:{span.Seconds:D2}";
         }
 
         public override void receiveKeyPress(Keys key)
@@ -166,6 +189,9 @@ namespace JunimoJamsRusted.UI
             float uiX = Game1.getMouseX(ui_scale: true);
             float uiY = Game1.getMouseY(ui_scale: true);
             this._view.UpdateInput(uiX, uiY, leftDown, 0f);
+
+            // Continuously update extrapolated progress in the menu
+            this.UpdateTrackState(this._track);
         }
 
         public override void draw(SpriteBatch b)
@@ -193,6 +219,9 @@ namespace JunimoJamsRusted.UI
                             ui.Title("Now Playing", "font-dialogue text-sdv-brown"),
                             ui.Text("No Track Playing", "font-dialogue text-sdv-brown shadow").Id("menu_track_title"),
                             ui.Text("Start Spotify or YouTube Music", "font-small text-sdv-dark").Id("menu_track_artist"),
+                            ui.Div("w-full py-1").Children(
+                                ui.ProgressBar("menu_progress_bar", 0f, 100f, "w-full h-4")
+                            ),
                             ui.Div("flex flex-row items-center justify-center gap-4 w-full pt-2").Children(
                                 ui.Button("btn_menu_prev", "|< Prev", "prev", "px-4"),
                                 ui.Button("btn_menu_playpause", "Play", "playpause", "px-6"),

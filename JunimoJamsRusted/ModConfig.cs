@@ -20,6 +20,9 @@ namespace JunimoJamsRusted
 
         public bool ShowAlbumArt { get; set; } = true;
         public bool ShowPlaybackButtons { get; set; } = true;
+        public bool ShowProgressBar { get; set; } = true;
+        public bool EnableMarqueeText { get; set; } = true;
+
         public bool OnlyShowInInventory { get; set; } = false;
         public bool HideOnMap { get; set; } = true;
 

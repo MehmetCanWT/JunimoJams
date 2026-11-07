@@ -1,50 +1,86 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
 namespace JunimoJamsRusted.Services
 {
-    public class CoverArtResult
+    public sealed class CoverArtResult
     {
         public byte[]? Bytes { get; set; }
         public string? RealArtist { get; set; }
+        public bool IsDirectFromOs { get; set; }
     }
 
-    public class ArtService : IDisposable
+    public sealed class ArtService : IDisposable
     {
         private readonly HttpClient _http;
         private readonly string _cachePath;
-        private string _lastSearchQuery = "";
+        private string _lastSearchQuery = string.Empty;
         private CoverArtResult? _lastResult;
-        private readonly object _cacheLock = new object();
+        private readonly object _cacheLock = new();
+
+        // Circuit breaker for offline / disconnected environments
+        private int _consecutiveFailures = 0;
+        private DateTime _circuitBreakerTripUntil = DateTime.MinValue;
+        private const int MAX_CONSECUTIVE_FAILURES = 3;
+        private static readonly TimeSpan CIRCUIT_BREAKER_DURATION = TimeSpan.FromSeconds(60);
 
         public ArtService(string modPath)
         {
-            this._http = new HttpClient();
-            this._http.Timeout = TimeSpan.FromSeconds(5.0);
-            this._http.DefaultRequestHeaders.Add("User-Agent", "JunimoJamsRusted/1.0");
+            this._http = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(4.0)
+            };
+            this._http.DefaultRequestHeaders.Add("User-Agent", "JunimoJamsRusted/2.0 (StardewValley-SMAPI; +https://github.com/MehmetCanWT)");
 
             this._cachePath = Path.Combine(modPath, "cache");
             Directory.CreateDirectory(this._cachePath);
         }
 
-        public async Task<CoverArtResult?> FetchCoverArtBytes(string artist, string trackName, CancellationToken cancellationToken = default)
+        public async Task<CoverArtResult?> FetchCoverArtBytes(
+            TrackInfo track,
+            CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(artist) || string.IsNullOrWhiteSpace(trackName))
+            if (string.IsNullOrWhiteSpace(track.Name) || string.IsNullOrWhiteSpace(track.Artist))
                 return null;
 
-            if (artist == "Unknown" || trackName == "Unknown")
+            if (track.Name == "Unknown" || track.Name == "Not Running" || track.Name == "Error")
                 return null;
 
-            string cleanTrackName = this.CleanTitle(trackName);
-            string queryKey = $"{artist}-{cleanTrackName}";
+            // ── Tier 0: Direct OS Artwork (MPRIS2 mpris:artUrl, Windows GSMTC, macOS MediaRemote) ──
+            if (track.DirectArtBytes != null && track.DirectArtBytes.Length > 0)
+            {
+                return new CoverArtResult
+                {
+                    Bytes = track.DirectArtBytes,
+                    RealArtist = track.Artist,
+                    IsDirectFromOs = true
+                };
+            }
+
+            if (!string.IsNullOrEmpty(track.DirectArtUri))
+            {
+                byte[]? directBytes = await this.TryLoadDirectUri(track.DirectArtUri, cancellationToken);
+                if (directBytes != null && directBytes.Length > 0)
+                {
+                    return new CoverArtResult
+                    {
+                        Bytes = directBytes,
+                        RealArtist = track.Artist,
+                        IsDirectFromOs = true
+                    };
+                }
+            }
+
+            // Clean title and extract featured artists
+            string cleanTrackName = TitleNormalizer.CleanTrackTitle(track.Name, out string? featArtist);
+            string cleanArtist = TitleNormalizer.NormalizeUnicode(track.Artist);
+            string queryKey = $"{cleanArtist}-{cleanTrackName}";
 
             lock (this._cacheLock)
             {
@@ -52,76 +88,105 @@ namespace JunimoJamsRusted.Services
                     return this._lastResult;
             }
 
-            // Check local cache first
-            byte[]? cached = this.GetFromCache(queryKey, out string? cachedArtist);
-            if (cached != null)
+            // ── Tier 1: Local SSD Disk Cache (SHA-256) ──
+            byte[]? cached = this.GetFromDiskCache(queryKey, out string? cachedArtist);
+            if (cached != null && cached.Length > 0)
             {
-                var result = new CoverArtResult { Bytes = cached, RealArtist = cachedArtist };
-                this._lastSearchQuery = queryKey;
-                this._lastResult = result;
+                var result = new CoverArtResult
+                {
+                    Bytes = cached,
+                    RealArtist = cachedArtist ?? track.Artist,
+                    IsDirectFromOs = false
+                };
+
+                lock (this._cacheLock)
+                {
+                    this._lastSearchQuery = queryKey;
+                    this._lastResult = result;
+                }
                 return result;
             }
 
+            // Check Circuit Breaker before making web requests
+            if (DateTime.UtcNow < this._circuitBreakerTripUntil)
+            {
+                return null; // Circuit open: skip network requests while offline
+            }
+
+            // ── Tier 2: Apple iTunes Search API ──
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                bool isGenericArtist = artist.Equals("YouTube Music", StringComparison.OrdinalIgnoreCase);
-                string term = isGenericArtist ? cleanTrackName : $"{artist} {cleanTrackName}";
-                string url = $"https://itunes.apple.com/search?term={Uri.EscapeDataString(term)}&entity=song&limit=10";
-                string response = await this._http.GetStringAsync(url, cancellationToken);
+                bool isGenericArtist = cleanArtist.Equals("YouTube Music", StringComparison.OrdinalIgnoreCase);
+                string term = isGenericArtist ? cleanTrackName : $"{cleanArtist} {cleanTrackName}";
+                string url = $"https://itunes.apple.com/search?term={Uri.EscapeDataString(term)}&entity=song&limit=8";
 
+                string response = await this._http.GetStringAsync(url, cancellationToken);
                 JObject json = JObject.Parse(response);
                 JArray? results = json["results"] as JArray;
 
                 if (results == null || results.Count == 0)
+                {
                     return null;
+                }
 
                 string? bestArtUrl = null;
-                double bestScore = -1;
+                double bestScore = -1.0;
                 string? bestArtist = null;
 
                 foreach (JToken result in results)
                 {
-                    string foundArtist = result["artistName"]?.ToString() ?? "";
-                    string foundTitle = result["trackName"]?.ToString() ?? "";
+                    string foundArtist = result["artistName"]?.ToString() ?? string.Empty;
+                    string foundTitle = result["trackName"]?.ToString() ?? string.Empty;
 
-                    double score = isGenericArtist 
-                        ? this.GetStringSimilarity(cleanTrackName, foundTitle)
-                        : this.CalculateMatchScore(artist, cleanTrackName, foundArtist, foundTitle);
+                    double score = StringSimilarity.CalculateCompositeScore(
+                        cleanArtist, cleanTrackName,
+                        foundArtist, foundTitle,
+                        isGenericArtist
+                    );
 
-                    double threshold = isGenericArtist ? 0.85 : 0.5;
+                    double threshold = isGenericArtist ? 0.80 : 0.45;
 
                     if (score > bestScore && score > threshold)
                     {
                         string? art = result["artworkUrl100"]?.ToString();
                         if (!string.IsNullOrEmpty(art))
                         {
-                            bestArtUrl = art.Replace("100x100", "600x600");
+                            // Dynamic URL upgrade: replace 100x100 with crisp 600x600bb.jpg
+                            bestArtUrl = art.Replace("100x100bb.jpg", "600x600bb.jpg")
+                                            .Replace("100x100", "600x600");
                             bestScore = score;
-                            if (isGenericArtist)
-                            {
-                                bestArtist = foundArtist;
-                            }
+                            bestArtist = foundArtist;
                         }
                     }
                 }
 
                 if (string.IsNullOrEmpty(bestArtUrl))
+                {
                     return null;
+                }
 
                 cancellationToken.ThrowIfCancellationRequested();
+                byte[] rawImageBytes = await this._http.GetByteArrayAsync(bestArtUrl, cancellationToken);
 
-                byte[] imageBytes = await this._http.GetByteArrayAsync(bestArtUrl, cancellationToken);
-                var finalResult = new CoverArtResult { Bytes = imageBytes, RealArtist = bestArtist };
-                
+                // Reset circuit breaker on success
+                this._consecutiveFailures = 0;
+
+                var finalResult = new CoverArtResult
+                {
+                    Bytes = rawImageBytes,
+                    RealArtist = bestArtist ?? track.Artist,
+                    IsDirectFromOs = false
+                };
+
                 lock (this._cacheLock)
                 {
                     this._lastSearchQuery = queryKey;
                     this._lastResult = finalResult;
                 }
-                this.SaveToCache(queryKey, imageBytes, bestArtist);
 
+                this.SaveToDiskCache(queryKey, rawImageBytes, bestArtist);
                 return finalResult;
             }
             catch (OperationCanceledException)
@@ -130,103 +195,98 @@ namespace JunimoJamsRusted.Services
             }
             catch
             {
+                this._consecutiveFailures++;
+                if (this._consecutiveFailures >= MAX_CONSECUTIVE_FAILURES)
+                {
+                    this._circuitBreakerTripUntil = DateTime.UtcNow + CIRCUIT_BREAKER_DURATION;
+                }
                 return null;
             }
         }
 
-        private byte[]? GetFromCache(string key, out string? cachedArtist)
+        private async Task<byte[]?> TryLoadDirectUri(string uriString, CancellationToken ct)
+        {
+            try
+            {
+                if (uriString.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+                {
+                    string localPath = Uri.UnescapeDataString(new Uri(uriString).LocalPath);
+                    if (File.Exists(localPath))
+                    {
+                        return await File.ReadAllBytesAsync(localPath, ct);
+                    }
+                }
+                else if (uriString.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                         uriString.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    return await this._http.GetByteArrayAsync(uriString, ct);
+                }
+            }
+            catch
+            {
+                // Ignore transient direct loading errors
+            }
+            return null;
+        }
+
+        private byte[]? GetFromDiskCache(string key, out string? cachedArtist)
         {
             cachedArtist = null;
             try
             {
-                string baseName = Path.Combine(this._cachePath, this.GetCacheFileName(key));
-                if (File.Exists(baseName + ".png"))
+                string hash = this.ComputeSha256(key);
+                string imgPath = Path.Combine(this._cachePath, $"{hash}.png");
+                string metaPath = Path.Combine(this._cachePath, $"{hash}.json");
+
+                if (File.Exists(imgPath))
                 {
-                    if (File.Exists(baseName + ".txt"))
+                    if (File.Exists(metaPath))
                     {
-                        cachedArtist = File.ReadAllText(baseName + ".txt", Encoding.UTF8);
+                        cachedArtist = File.ReadAllText(metaPath, Encoding.UTF8).Trim();
                     }
-                    return File.ReadAllBytes(baseName + ".png");
+                    return File.ReadAllBytes(imgPath);
                 }
-                return null;
             }
-            catch { return null; }
+            catch
+            {
+                // Fallback to network
+            }
+            return null;
         }
 
-        private void SaveToCache(string key, byte[] bytes, string? realArtist)
+        private void SaveToDiskCache(string key, byte[] bytes, string? realArtist)
         {
             try
             {
-                string baseName = Path.Combine(this._cachePath, this.GetCacheFileName(key));
-                File.WriteAllBytes(baseName + ".png", bytes);
+                string hash = this.ComputeSha256(key);
+                string imgPath = Path.Combine(this._cachePath, $"{hash}.png");
+                string tmpPath = Path.Combine(this._cachePath, $"{hash}.tmp");
+                string metaPath = Path.Combine(this._cachePath, $"{hash}.json");
+
+                // Atomic write with .tmp
+                File.WriteAllBytes(tmpPath, bytes);
+                File.Move(tmpPath, imgPath, overwrite: true);
+
                 if (!string.IsNullOrEmpty(realArtist))
                 {
-                    File.WriteAllText(baseName + ".txt", realArtist, Encoding.UTF8);
+                    File.WriteAllText(metaPath, realArtist, Encoding.UTF8);
                 }
             }
-            catch { }
+            catch
+            {
+                // Non-critical write failure
+            }
         }
 
-        private string GetCacheFileName(string key)
+        private string ComputeSha256(string input)
         {
-            byte[] hash = MD5.HashData(Encoding.UTF8.GetBytes(key));
+            byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
             return Convert.ToHexString(hash);
         }
 
         public void Dispose()
         {
-            this._http?.Dispose();
-        }
-
-        private string CleanTitle(string title)
-        {
-            if (string.IsNullOrEmpty(title))
-                return title;
-
-            string[] tags = { " - Remastered", " - Remaster", " (Remastered)", " (Remaster)", " - Live", " (Live)", " - Radio Edit", "(feat. ", "feat. " };
-            foreach (string tag in tags)
-            {
-                int index = title.IndexOf(tag, StringComparison.OrdinalIgnoreCase);
-                if (index > 0)
-                    title = title.Substring(0, index);
-            }
-
-            int dashIndex = title.IndexOf(" - ");
-            if (dashIndex > 0)
-                title = title.Substring(0, dashIndex);
-
-            return Regex.Replace(title, @"\s*[\(\[].*?[\)\]]", "").Trim();
-        }
-
-        private double CalculateMatchScore(string targetArtist, string targetTitle, string foundArtist, string foundTitle)
-        {
-            double artistScore = this.GetStringSimilarity(targetArtist, foundArtist);
-            double titleScore = this.GetStringSimilarity(targetTitle, foundTitle);
-
-            return (artistScore * 0.4) + (titleScore * 0.6);
-        }
-
-        private double GetStringSimilarity(string s, string t)
-        {
-            if (string.IsNullOrEmpty(s) || string.IsNullOrEmpty(t)) return 0;
-            s = s.ToLowerInvariant().Trim();
-            t = t.ToLowerInvariant().Trim();
-
-            if (s == t) return 1.0;
-            if (s.Contains(t) || t.Contains(s)) return 0.85;
-
-            var wordsS = new HashSet<string>(s.Split(' ', StringSplitOptions.RemoveEmptyEntries));
-            var wordsT = new HashSet<string>(t.Split(' ', StringSplitOptions.RemoveEmptyEntries));
-
-            int intersection = 0;
-            foreach (var w in wordsS)
-            {
-                if (wordsT.Contains(w))
-                    intersection++;
-            }
-
-            int union = wordsS.Count + wordsT.Count - intersection;
-            return union == 0 ? 0 : (double)intersection / union;
+            this._http.Dispose();
         }
     }
 }
