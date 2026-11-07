@@ -6,6 +6,10 @@
   "UniqueID": "MehmetCanWT.JunimoJams",
   "EntryDll": "JunimoJams.dll",
   "MinimumApiVersion": "4.1.0",
+  "UpdateKeys": [
+    "Nexus:???",
+    "CurseForge:???"
+  ],
   "Dependencies": [
     {
       "UniqueID": "Mehmetcan.RustedUI",
