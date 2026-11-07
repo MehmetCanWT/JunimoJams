@@ -130,6 +130,7 @@ namespace JunimoJamsRusted
 
             configMenu.AddNumberOption(this.ModManifest, () => this._config.HudPositionX, v => this._config.HudPositionX = v, () => "X Position", () => "Horizontal position", 0, 2000);
             configMenu.AddNumberOption(this.ModManifest, () => this._config.HudPositionY, v => this._config.HudPositionY = v, () => "Y Position", () => "Vertical position", 0, 2000);
+            configMenu.AddNumberOption(this.ModManifest, () => this._config.HudScale, v => this._config.HudScale = (float)Math.Round(v, 2), () => "HUD Scale", () => "Scale multiplier for the music player overlay", min: 0.5f, max: 2.0f, interval: 0.05f);
         }
 
         private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)

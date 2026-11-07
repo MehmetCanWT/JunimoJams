@@ -98,14 +98,24 @@ namespace JunimoJamsRusted.UI
             if (!this._config.ShowHud || !this._config.ShowPlaybackButtons)
                 return false;
 
+            float s = Math.Clamp(this._config.HudScale, 0.5f, 2.5f);
+            if (s <= 0.01f) s = 1.0f;
+
             int cardX = this._config.HudPositionX;
             int cardY = this._config.HudPositionY;
+            int cardW = (int)(CARD_WIDTH * s);
+            int cardH = (int)(CARD_HEIGHT * s);
 
-            Rectangle cardRect = new Rectangle(cardX, cardY, CARD_WIDTH, CARD_HEIGHT);
+            Rectangle cardRect = new Rectangle(cardX, cardY, cardW, cardH);
             bool isOverCard = cardRect.Contains((int)mouseX, (int)mouseY);
 
-            int ctrlY = cardY + 58;
-            int centerX = cardX + 82 + (228 / 2);
+            float unscaledX = (mouseX - cardX) / s;
+            float unscaledY = (mouseY - cardY) / s;
+
+            int colX = 82;
+            int colW = 228;
+            int ctrlY = 58;
+            int centerX = colX + (colW / 2);
 
             Rectangle prevHit = new Rectangle(centerX - 44 - 4, ctrlY - 4, 24, 24);
             Rectangle playHit = new Rectangle(centerX - 8 - 4, ctrlY - 4, 24, 24);
@@ -114,21 +124,21 @@ namespace JunimoJamsRusted.UI
             bool actionFired = false;
             if (leftMouseDown && !this._wasMouseDown)
             {
-                if (prevHit.Contains((int)mouseX, (int)mouseY))
+                if (prevHit.Contains((int)unscaledX, (int)unscaledY))
                 {
                     Game1.playSound("smallSelect");
                     this._musicService.PreviousTrack();
                     this._onStateChangedAction();
                     actionFired = true;
                 }
-                else if (playHit.Contains((int)mouseX, (int)mouseY))
+                else if (playHit.Contains((int)unscaledX, (int)unscaledY))
                 {
                     Game1.playSound("smallSelect");
                     this._musicService.TogglePlayPause();
                     this._onStateChangedAction();
                     actionFired = true;
                 }
-                else if (nextHit.Contains((int)mouseX, (int)mouseY))
+                else if (nextHit.Contains((int)unscaledX, (int)unscaledY))
                 {
                     Game1.playSound("smallSelect");
                     this._musicService.NextTrack();
@@ -146,8 +156,13 @@ namespace JunimoJamsRusted.UI
             if (!this._config.ShowHud)
                 return;
 
+            float s = Math.Clamp(this._config.HudScale, 0.5f, 2.5f);
+            if (s <= 0.01f) s = 1.0f;
+
             int cardX = this._config.HudPositionX;
             int cardY = this._config.HudPositionY;
+            int cardW = (int)(CARD_WIDTH * s);
+            int cardH = (int)(CARD_HEIGHT * s);
 
             HudThemeColors colors = GetThemeColors(this._config.Theme);
             GraphicsDevice device = Game1.graphics.GraphicsDevice;
@@ -157,20 +172,20 @@ namespace JunimoJamsRusted.UI
             // 1. Drop Shadow (4px offset)
             spriteBatch.Draw(
                 this._cardBgTexture!,
-                new Rectangle(cardX + 4, cardY + 6, CARD_WIDTH, CARD_HEIGHT),
+                new Rectangle((int)(cardX + 4 * s), (int)(cardY + 6 * s), cardW, cardH),
                 Color.Black * 0.45f
             );
 
             // 2. Card Background & Border
             spriteBatch.Draw(
                 this._cardBgTexture!,
-                new Rectangle(cardX, cardY, CARD_WIDTH, CARD_HEIGHT),
+                new Rectangle(cardX, cardY, cardW, cardH),
                 colors.Background
             );
 
             spriteBatch.Draw(
                 this._cardBorderTexture!,
-                new Rectangle(cardX, cardY, CARD_WIDTH, CARD_HEIGHT),
+                new Rectangle(cardX, cardY, cardW, cardH),
                 colors.Border
             );
 
@@ -178,33 +193,34 @@ namespace JunimoJamsRusted.UI
             {
                 spriteBatch.Draw(
                     Game1.staminaRect,
-                    new Rectangle(cardX + CORNER_RADIUS, cardY, CARD_WIDTH - (CORNER_RADIUS * 2), 2),
+                    new Rectangle((int)(cardX + CORNER_RADIUS * s), cardY, (int)((CARD_WIDTH - (CORNER_RADIUS * 2)) * s), (int)Math.Max(1, 2 * s)),
                     colors.BorderHighlight
                 );
             }
 
-            // 3. Album Art Slot (64x64, flush at cardX + 9, cardY + 9)
-            int artX = cardX + 9;
-            int artY = cardY + 9;
-            Rectangle artRect = new Rectangle(artX, artY, ART_SIZE, ART_SIZE);
+            // 3. Album Art Slot
+            int artX = (int)(cardX + 9 * s);
+            int artY = (int)(cardY + 9 * s);
+            int artSize = (int)(ART_SIZE * s);
+            Rectangle artRect = new Rectangle(artX, artY, artSize, artSize);
 
             spriteBatch.Draw(this._artBgTexture!, artRect, new Color(11, 23, 17));
 
             if (this._config.ShowAlbumArt && track.CoverArt != null && !track.CoverArt.IsDisposed)
             {
-                this.DrawRoundedArt(spriteBatch, track.CoverArt, artRect, radius: 4);
+                this.DrawRoundedArt(spriteBatch, track.CoverArt, artRect, radius: (int)Math.Max(2, 4 * s));
             }
             else
             {
-                // Draw elegant Sparkle fallback
-                Vector2 center = new Vector2(artX + 22, artY + 18);
-                spriteBatch.DrawString(Game1.smallFont, "*", center + new Vector2(1, 1), Color.Black * 0.5f, 0f, Vector2.Zero, 1.2f, SpriteEffects.None, 1f);
-                spriteBatch.DrawString(Game1.smallFont, "*", center, colors.BorderHighlight, 0f, Vector2.Zero, 1.2f, SpriteEffects.None, 1f);
+                Vector2 center = new Vector2(artX + (22 * s), artY + (18 * s));
+                float starScale = 1.2f * s;
+                spriteBatch.DrawString(Game1.smallFont, "*", center + new Vector2(1, 1), Color.Black * 0.5f, 0f, Vector2.Zero, starScale, SpriteEffects.None, 1f);
+                spriteBatch.DrawString(Game1.smallFont, "*", center, colors.BorderHighlight, 0f, Vector2.Zero, starScale, SpriteEffects.None, 1f);
             }
 
-            // 4. Content Column (cardX + 82 to cardX + 310, width = 228px)
-            int colX = cardX + 82;
-            int colW = 228;
+            // 4. Content Column
+            int colX = (int)(cardX + 82 * s);
+            int colW = (int)(228 * s);
 
             // Row 1: Title & Time
             string displayTitle = this._config.EnableMarqueeText ? this._titleMarquee.GetVisibleText() : StringUtils.NormalizeForHud(track.Name);
@@ -217,44 +233,48 @@ namespace JunimoJamsRusted.UI
                 timeStr = $"{FormatTime(currentPos)} / {FormatTime(track.Duration)}";
             }
 
-            float timeScale = 0.52f;
+            float timeScale = 0.52f * s;
             float timeWidth = Game1.smallFont.MeasureString(timeStr).X * timeScale;
-            Vector2 timePos = new Vector2(colX + colW - timeWidth, cardY + 9);
+            Vector2 timePos = new Vector2(colX + colW - timeWidth, cardY + (9 * s));
             spriteBatch.DrawString(Game1.smallFont, timeStr, timePos + new Vector2(1, 1), Color.Black * 0.7f, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
             spriteBatch.DrawString(Game1.smallFont, timeStr, timePos, colors.Time, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
 
-            // Title with shadow (scaled 0.62f, fits perfectly above artist)
-            Vector2 titlePos = new Vector2(colX, cardY + 8);
-            spriteBatch.DrawString(Game1.smallFont, displayTitle, titlePos + new Vector2(1, 1), Color.Black * 0.85f, 0f, Vector2.Zero, 0.62f, SpriteEffects.None, 1f);
-            spriteBatch.DrawString(Game1.smallFont, displayTitle, titlePos, colors.Title, 0f, Vector2.Zero, 0.62f, SpriteEffects.None, 1f);
+            // Title with shadow
+            float titleScale = 0.62f * s;
+            Vector2 titlePos = new Vector2(colX, cardY + (8 * s));
+            spriteBatch.DrawString(Game1.smallFont, displayTitle, titlePos + new Vector2(1, 1), Color.Black * 0.85f, 0f, Vector2.Zero, titleScale, SpriteEffects.None, 1f);
+            spriteBatch.DrawString(Game1.smallFont, displayTitle, titlePos, colors.Title, 0f, Vector2.Zero, titleScale, SpriteEffects.None, 1f);
 
-            // Row 2: Equalizer & Artist (Y = cardY + 28, height = 12px)
+            // Row 2: Equalizer & Artist
             int artistX = colX;
             if (track.IsPlaying)
             {
                 this._equalizer.Update(isPlaying: true);
                 float[] bars = this._equalizer.GetBars();
-                int eqY = cardY + 38;
+                int eqY = (int)(cardY + 38 * s);
+                int barW = (int)Math.Max(1, 2 * s);
+                int barGap = (int)Math.Max(2, 3 * s);
                 for (int i = 0; i < 3; i++)
                 {
-                    int barH = Math.Max(2, (int)(bars[i] * 8f));
-                    Rectangle barRect = new Rectangle(colX + (i * 3), eqY - barH, 2, barH);
+                    int barH = Math.Max(2, (int)(bars[i] * 8f * s));
+                    Rectangle barRect = new Rectangle(colX + (i * barGap), eqY - barH, barW, barH);
                     spriteBatch.Draw(Game1.staminaRect, barRect, colors.ProgressFill);
                 }
-                artistX += 13;
+                artistX += (int)(13 * s);
             }
 
             string displayArtist = this._config.EnableMarqueeText ? this._artistMarquee.GetVisibleText() : StringUtils.NormalizeForHud(track.Artist);
             if (string.IsNullOrWhiteSpace(displayArtist)) displayArtist = "Music Player";
 
-            float artistScale = 0.52f;
-            Vector2 artistPos = new Vector2(artistX, cardY + 28);
+            float artistScale = 0.52f * s;
+            Vector2 artistPos = new Vector2(artistX, cardY + (28 * s));
             spriteBatch.DrawString(Game1.smallFont, displayArtist, artistPos + new Vector2(1, 1), Color.Black * 0.7f, 0f, Vector2.Zero, artistScale, SpriteEffects.None, 1f);
             spriteBatch.DrawString(Game1.smallFont, displayArtist, artistPos, colors.Artist, 0f, Vector2.Zero, artistScale, SpriteEffects.None, 1f);
 
-            // Row 3: Slim Progress Bar (Y = cardY + 47, height = 4px)
-            int barY = cardY + 47;
-            Rectangle barTrackRect = new Rectangle(colX, barY, colW, 4);
+            // Row 3: Slim Progress Bar
+            int barY = (int)(cardY + 47 * s);
+            int barHeight = (int)Math.Max(2, 4 * s);
+            Rectangle barTrackRect = new Rectangle(colX, barY, colW, barHeight);
             spriteBatch.Draw(Game1.staminaRect, barTrackRect, colors.ProgressTrack);
 
             // 1px bar border
@@ -267,30 +287,34 @@ namespace JunimoJamsRusted.UI
                 int fillWidth = (int)(colW * ratio);
                 if (fillWidth > 0)
                 {
-                    spriteBatch.Draw(Game1.staminaRect, new Rectangle(colX, barY, fillWidth, 4), colors.ProgressFill);
+                    spriteBatch.Draw(Game1.staminaRect, new Rectangle(colX, barY, fillWidth, barHeight), colors.ProgressFill);
                 }
             }
 
-            // Row 4: Centered Lucide Media Controls (Y = cardY + 58)
+            // Row 4: Centered Lucide Media Controls
             if (this._config.ShowPlaybackButtons)
             {
                 float mouseX = Game1.getMouseX(ui_scale: true);
                 float mouseY = Game1.getMouseY(ui_scale: true);
 
-                int ctrlY = cardY + 58;
+                float unscaledX = (mouseX - cardX) / s;
+                float unscaledY = (mouseY - cardY) / s;
+
+                int ctrlY = (int)(cardY + 58 * s);
                 int centerX = colX + (colW / 2);
+                int iconSize = (int)(16 * s);
 
-                Rectangle prevRect = new Rectangle(centerX - 44, ctrlY, 16, 16);
-                Rectangle playRect = new Rectangle(centerX - 8, ctrlY, 16, 16);
-                Rectangle nextRect = new Rectangle(centerX + 28, ctrlY, 16, 16);
+                Rectangle prevRect = new Rectangle(centerX - (int)(44 * s), ctrlY, iconSize, iconSize);
+                Rectangle playRect = new Rectangle(centerX - (int)(8 * s), ctrlY, iconSize, iconSize);
+                Rectangle nextRect = new Rectangle(centerX + (int)(28 * s), ctrlY, iconSize, iconSize);
 
-                Rectangle prevHit = new Rectangle(prevRect.X - 4, prevRect.Y - 4, 24, 24);
-                Rectangle playHit = new Rectangle(playRect.X - 4, playRect.Y - 4, 24, 24);
-                Rectangle nextHit = new Rectangle(nextRect.X - 4, nextRect.Y - 4, 24, 24);
+                Rectangle prevHit = new Rectangle(82 + 114 - 44 - 4, 58 - 4, 24, 24);
+                Rectangle playHit = new Rectangle(82 + 114 - 8 - 4, 58 - 4, 24, 24);
+                Rectangle nextHit = new Rectangle(82 + 114 + 28 - 4, 58 - 4, 24, 24);
 
-                Color prevCol = prevHit.Contains((int)mouseX, (int)mouseY) ? colors.IconHover : colors.IconNormal;
-                Color playCol = playHit.Contains((int)mouseX, (int)mouseY) ? colors.IconHover : colors.IconNormal;
-                Color nextCol = nextHit.Contains((int)mouseX, (int)mouseY) ? colors.IconHover : colors.IconNormal;
+                Color prevCol = prevHit.Contains((int)unscaledX, (int)unscaledY) ? colors.IconHover : colors.IconNormal;
+                Color playCol = playHit.Contains((int)unscaledX, (int)unscaledY) ? colors.IconHover : colors.IconNormal;
+                Color nextCol = nextHit.Contains((int)unscaledX, (int)unscaledY) ? colors.IconHover : colors.IconNormal;
 
                 // Prev (glyph 0: 0..15)
                 spriteBatch.Draw(this._mediaIconsTexture!, prevRect, new Rectangle(0, 0, 16, 16), prevCol);

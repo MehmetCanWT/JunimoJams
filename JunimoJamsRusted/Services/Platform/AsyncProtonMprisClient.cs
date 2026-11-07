@@ -427,8 +427,15 @@ namespace JunimoJamsRusted.Services.Platform
                         album = alStr;
                     if (dict.TryGetValue("mpris:artUrl", out object? u) && u is string uStr)
                         artUrl = uStr;
-                    if (dict.TryGetValue("mpris:length", out object? l) && l is long lMicro && lMicro > 0)
-                        duration = TimeSpan.FromMilliseconds(lMicro / 1000.0);
+                    if (dict.TryGetValue("mpris:length", out object? l))
+                    {
+                        if (l is long lMicro && lMicro > 0)
+                            duration = TimeSpan.FromMilliseconds(lMicro / 1000.0);
+                        else if (l is int lInt && lInt > 0)
+                            duration = TimeSpan.FromMilliseconds(lInt / 1000.0);
+                    }
+
+                    this.Log($"Metadata parsed: title='{title}', artist='{artist}', length={duration.TotalSeconds}s, artUrl='{artUrl}'", LogLevel.Info);
                 }
 
                 // Query Position
@@ -966,7 +973,7 @@ namespace JunimoJamsRusted.Services.Platform
                 string vSig = Encoding.ASCII.GetString(b, pos, vSigLen);
                 pos += vSigLen + 1;
 
-                if (vSig == "s")
+                if (vSig == "s" || vSig == "o")
                 {
                     rem = pos % 4;
                     if (rem != 0) pos += (4 - rem);
@@ -986,6 +993,27 @@ namespace JunimoJamsRusted.Services.Platform
                     if (pos + 8 > b.Length) break;
                     dict[key] = BitConverter.ToInt64(b, pos);
                     pos += 8;
+                }
+                else if (vSig == "i" || vSig == "u")
+                {
+                    rem = pos % 4;
+                    if (rem != 0) pos += (4 - rem);
+                    if (pos + 4 > b.Length) break;
+                    dict[key] = BitConverter.ToInt32(b, pos);
+                    pos += 4;
+                }
+                else if (vSig == "d")
+                {
+                    rem = pos % 8;
+                    if (rem != 0) pos += (8 - rem);
+                    if (pos + 8 > b.Length) break;
+                    dict[key] = BitConverter.ToDouble(b, pos);
+                    pos += 8;
+                }
+                else if (vSig == "b")
+                {
+                    if (pos >= b.Length) break;
+                    dict[key] = b[pos++] != 0;
                 }
                 else if (vSig == "as")
                 {

@@ -17,6 +17,7 @@ namespace JunimoJamsRusted
 
         public int HudPositionX { get; set; } = 16;
         public int HudPositionY { get; set; } = 16;
+        public float HudScale { get; set; } = 1.0f;
 
         public bool ShowAlbumArt { get; set; } = true;
         public bool ShowPlaybackButtons { get; set; } = true;
