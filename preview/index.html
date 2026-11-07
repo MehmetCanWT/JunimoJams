@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Junimo Jams (RustedUI) - Live HUD Preview</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: #121214;
+            color: #E4E4E7;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px 16px;
+            min-height: 100vh;
+        }
+
+        header {
+            width: 100%;
+            max-width: 1080px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding: 12px 20px;
+            background: #18181B;
+            border: 1px solid #27272A;
+            border-radius: 12px;
+        }
+
+        h1 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #86EFAC;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .controls-toolbar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #A1A1AA;
+        }
+
+        select, button.tool-btn {
+            background: #27272A;
+            color: #FAFAFA;
+            border: 1px solid #3F3F46;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.15s ease;
+        }
+
+        select:hover, button.tool-btn:hover {
+            background: #3F3F46;
+            border-color: #71717A;
+        }
+
+        /* Screen Simulation Canvas */
+        .game-viewport {
+            width: 100%;
+            max-width: 1080px;
+            height: 600px;
+            position: relative;
+            background: #000;
+            border: 2px solid #27272A;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+        }
+
+        /* Background in-game scene */
+        .game-scene {
+            position: absolute;
+            inset: 0;
+            background: #1A130E;
+            background-image: 
+                radial-gradient(circle at 75% 40%, rgba(255, 230, 180, 0.15) 0%, transparent 60%),
+                linear-gradient(to right, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.1) 40%, transparent 100%);
+        }
+
+        /* Simulated wooden floor planks */
+        .wood-floor {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 65%;
+            height: 85%;
+            background: #965B32;
+            border-left: 8px solid #5A351B;
+            border-top: 8px solid #5A351B;
+            background-image: repeating-linear-gradient(
+                to bottom,
+                transparent,
+                transparent 38px,
+                #6B3E1F 39px,
+                #6B3E1F 40px
+            );
+        }
+
+        /* Simulated Farmhouse TV & Furniture */
+        .furniture-tv {
+            position: absolute;
+            right: 280px;
+            top: 190px;
+            width: 130px;
+            height: 150px;
+            background: #474747;
+            border: 6px solid #2B2B2B;
+            border-radius: 8px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .furniture-tv::after {
+            content: '';
+            width: 90px;
+            height: 80px;
+            background: #1A1A1A;
+            border-radius: 4px;
+            border: 3px solid #111;
+        }
+
+        /* Stardew Inventory Hotbar */
+        .inventory-hotbar {
+            position: absolute;
+            top: 16px;
+            left: 480px;
+            display: flex;
+            gap: 4px;
+            padding: 6px;
+            background: #D98838;
+            border: 4px solid #733910;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.5);
+            border-radius: 4px;
+            z-index: 5;
+        }
+        .hotbar-slot {
+            width: 44px;
+            height: 44px;
+            background: #E8AA61;
+            border: 3px solid #B86B28;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            position: relative;
+        }
+        .hotbar-slot.active {
+            border-color: #FF3B30;
+            box-shadow: 0 0 0 2px #FF3B30;
+        }
+        .hotbar-slot span.slot-num {
+            position: absolute;
+            top: 2px;
+            left: 3px;
+            font-size: 10px;
+            color: #733910;
+            font-family: 'Press Start 2P', monospace;
+        }
+
+        /* ══════════════════════════════════════════════════════════════════════
+           THE LIVE HUD OVERLAY (Exact match for RustedUI Taffy engine layout)
+           ══════════════════════════════════════════════════════════════════════ */
+        #live-hud-container {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            z-index: 10;
+        }
+
+        .music-card {
+            width: 320px;
+            height: 76px;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            padding: 8px;
+            gap: 10px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 4px 6px 16px rgba(0, 0, 0, 0.45);
+            transition: all 0.2s ease;
+        }
+
+        /* THEMES */
+        /* 1. Junimo Forest (The user's active theme) */
+        .theme-JunimoForest {
+            background-color: #14261C;
+            border: 3px solid #86EFAC;
+            box-shadow: 0 8px 0 rgba(0,0,0,0.35);
+        }
+        .theme-JunimoForest::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: #86EFAC;
+        }
+
+        /* 2. Pelican Classic (Vanilla Stardew Wood & Parchment) */
+        .theme-PelicanClassic {
+            background: #FEE7B6;
+            border: 4px solid #A0522D;
+            border-image: linear-gradient(to bottom, #CD853F, #8B4513) 4;
+            box-shadow: 4px 6px 0 rgba(0,0,0,0.4);
+        }
+
+        /* 3. Shadcn Zinc Dark */
+        .theme-ShadcnZincDark {
+            background: #09090B;
+            border: 1px solid #27272A;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+            border-radius: 8px;
+        }
+
+        /* 4. Cyberpunk Neon */
+        .theme-Cyberpunk {
+            background: #0A0616;
+            border: 2px solid #00F0FF;
+            box-shadow: 0 0 14px rgba(0, 240, 255, 0.4);
+        }
+        .theme-Cyberpunk::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #FCEE0A;
+        }
+
+        /* 5. Catppuccin Mocha */
+        .theme-CatppuccinMocha {
+            background: #1E1E2E;
+            border: 2px solid #CBA6F7;
+            border-radius: 8px;
+        }
+
+        /* 6. Tokyo Night */
+        .theme-TokyoNight {
+            background: #1A1B26;
+            border: 2px solid #7AA2F7;
+            border-radius: 8px;
+        }
+
+        /* 7. Dracula */
+        .theme-Dracula {
+            background: #282A36;
+            border: 2px solid #BD93F9;
+            border-radius: 8px;
+        }
+
+        /* 8. Nord */
+        .theme-Nord {
+            background: #2E3440;
+            border: 2px solid #88C0D0;
+            border-radius: 8px;
+        }
+
+        /* 9. Wizard Arcane */
+        .theme-WizardArcane {
+            background: #0F081D;
+            border: 2px solid #A855F7;
+            border-radius: 8px;
+            box-shadow: 0 0 12px rgba(168, 85, 247, 0.3);
+        }
+
+        /* 10. JojaCorp */
+        .theme-JojaCorp {
+            background: #0F172A;
+            border: 2px solid #38BDF8;
+            border-radius: 8px;
+        }
+
+        /* Album Art Slot: Flush 60x60 square */
+        .album-art-slot {
+            width: 60px;
+            height: 60px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+            background: #0B1711;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .theme-PelicanClassic .album-art-slot {
+            background: #E8C896;
+            border: 2px solid #8B4513;
+        }
+
+        .album-art-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 4px;
+            display: block;
+        }
+
+        .album-art-fallback {
+            color: #86EFAC;
+            font-size: 20px;
+        }
+
+        /* Right Column (Track Info & Controls) */
+        .content-col {
+            flex: 1;
+            height: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-width: 0;
+            padding: 1px 0;
+        }
+
+        /* Row 1: Title & Time */
+        .row-title {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            min-width: 0;
+            gap: 6px;
+        }
+
+        .track-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 10px;
+            color: #FDE047; /* Junimo Yellow / Stardew Gold */
+            text-shadow: 1px 1px 0px #000;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex: 1;
+        }
+
+        .theme-PelicanClassic .track-title {
+            color: #4A2810;
+            text-shadow: none;
+            font-weight: bold;
+        }
+
+        .track-time {
+            font-family: 'VT323', monospace;
+            font-size: 14px;
+            color: #86EFAC;
+            flex-shrink: 0;
+            letter-spacing: 0.5px;
+        }
+        .theme-PelicanClassic .track-time {
+            color: #8B4513;
+        }
+
+        /* Row 2: Artist & Animated Equalizer */
+        .row-artist {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 6px;
+            width: 100%;
+            min-width: 0;
+        }
+
+        /* Mini Animated Retro Equalizer */
+        .equalizer-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 10px;
+            flex-shrink: 0;
+        }
+
+        .eq-bar {
+            width: 2px;
+            background: #86EFAC;
+            border-radius: 1px;
+            transition: height 0.08s ease;
+        }
+        .theme-Cyberpunk .eq-bar { background: #00F0FF; }
+        .theme-PelicanClassic .eq-bar { background: #CD853F; }
+
+        .track-artist {
+            font-family: 'VT323', monospace;
+            font-size: 15px;
+            color: #D1D5DB;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex: 1;
+        }
+        .theme-PelicanClassic .track-artist {
+            color: #3C1E0A;
+        }
+
+        /* Row 3: Progress Bar */
+        .progress-container {
+            width: 100%;
+            height: 5px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 2px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            margin: 2px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 45%;
+            background: #86EFAC;
+            border-radius: 2px;
+            transition: width 0.25s linear;
+        }
+        .theme-PelicanClassic .progress-fill { background: #E68A00; }
+        .theme-Cyberpunk .progress-fill { background: #00F0FF; }
+        .theme-CatppuccinMocha .progress-fill { background: #CBA6F7; }
+
+        /* Row 4: Controls (Lucide Media Icons) */
+        .controls-row {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            width: 100%;
+            height: 16px;
+        }
+
+        .media-btn {
+            width: 18px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0.85;
+            transition: all 0.12s ease;
+        }
+
+        .media-btn:hover {
+            opacity: 1;
+            transform: scale(1.15);
+        }
+
+        .media-btn svg {
+            width: 14px;
+            height: 14px;
+            fill: #E4E4E7;
+            filter: drop-shadow(1px 1px 0px rgba(0,0,0,0.8));
+        }
+
+        .theme-PelicanClassic .media-btn svg {
+            fill: #4A2810;
+        }
+
+        /* Dimension Guides & Specs */
+        .hud-specs-card {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 1080px;
+            background: #18181B;
+            border: 1px solid #27272A;
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            font-size: 13px;
+        }
+
+        .spec-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .spec-item .label {
+            color: #71717A;
+            font-weight: 500;
+        }
+        .spec-item .value {
+            color: #FAFAFA;
+            font-weight: 600;
+        }
+        .spec-item .desc {
+            color: #A1A1AA;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🎵 Junimo Jams (RustedUI) - Live HUD Preview</h1>
+        <div class="controls-toolbar">
+            <div class="control-group">
+                <label for="sel-theme">Theme:</label>
+                <select id="sel-theme" onchange="changeTheme(this.value)">
+                    <option value="JunimoForest">Junimo Forest (User Theme)</option>
+                    <option value="PelicanClassic">Pelican Classic (Vanilla Stardew)</option>
+                    <option value="ShadcnZincDark">Shadcn Zinc Dark</option>
+                    <option value="TokyoNight">Tokyo Night</option>
+                    <option value="CatppuccinMocha">Catppuccin Mocha</option>
+                    <option value="Dracula">Dracula</option>
+                    <option value="Nord">Nord</option>
+                    <option value="Cyberpunk">Cyberpunk Neon</option>
+                    <option value="WizardArcane">Wizard Arcane</option>
+                    <option value="JojaCorp">JojaCorp Blue</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="sel-track">Track:</label>
+                <select id="sel-track" onchange="changeTrack(this.value)">
+                    <option value="bitchord">ARGOMANIA - Танцуй (Slowed) [BitChord]</option>
+                    <option value="ace">Ace of Base - The Sign [Image 1 Reference]</option>
+                    <option value="soska">SOSKA 69 - Чёрная машина</option>
+                    <option value="idle">Not Running / Idle</option>
+                </select>
+            </div>
+
+            <button class="tool-btn" onclick="togglePlayPause()" id="btn-toggle-play">⏸ Pause</button>
+        </div>
+    </header>
+
+    <!-- Simulated Game Viewport (Farmhouse Screen with Hotbar) -->
+    <div class="game-viewport">
+        <div class="game-scene">
+            <div class="wood-floor"></div>
+            <div class="furniture-tv"></div>
+        </div>
+
+        <!-- Inventory Hotbar (Top Center/Right) -->
+        <div class="inventory-hotbar">
+            <div class="hotbar-slot active"><span class="slot-num">1</span>🪓</div>
+            <div class="hotbar-slot"><span class="slot-num">2</span>⛏️</div>
+            <div class="hotbar-slot"><span class="slot-num">3</span>🌾</div>
+            <div class="hotbar-slot"><span class="slot-num">4</span>🎣</div>
+            <div class="hotbar-slot"><span class="slot-num">5</span>🗡️</div>
+            <div class="hotbar-slot"><span class="slot-num">6</span>🥕</div>
+            <div class="hotbar-slot"><span class="slot-num">7</span>🍎</div>
+            <div class="hotbar-slot"><span class="slot-num">8</span>🪵</div>
+        </div>
+
+        <!-- ══════════════ EXACT RUSTED UI HUD OVERLAY ══════════════ -->
+        <div id="live-hud-container">
+            <div id="hud-card" class="music-card theme-JunimoForest">
+                <!-- 1. Flush 60x60 Album Art Frame -->
+                <div class="album-art-slot">
+                    <img id="hud-art" class="album-art-img" src="https://yt3.googleusercontent.com/RmHM2phNSlll4HndEybQzm8QRMAGqiNXe-MWjUbFMtA0UL2UDqm-y3GXT3roeb1dIIy4IOQ41jq3iSPH=w544-h544-l90-rj" alt="Cover" />
+                    <div id="hud-fallback-icon" class="album-art-fallback" style="display:none;">✨</div>
+                </div>
+
+                <!-- 2. Structured Right Column (Zero Overflow) -->
+                <div class="content-col">
+                    <!-- Row 1: Title & Time -->
+                    <div class="row-title">
+                        <span id="hud-title" class="track-title">Танцуй (Slowed)</span>
+                        <span id="hud-time" class="track-time">1:15 / 2:38</span>
+                    </div>
+
+                    <!-- Row 2: Animated Equalizer & Artist -->
+                    <div class="row-artist">
+                        <div class="equalizer-bars" id="eq-container">
+                            <div class="eq-bar" id="eq1" style="height: 6px;"></div>
+                            <div class="eq-bar" id="eq2" style="height: 9px;"></div>
+                            <div class="eq-bar" id="eq3" style="height: 4px;"></div>
+                        </div>
+                        <span id="hud-artist" class="track-artist">ARGOMANIA</span>
+                    </div>
+
+                    <!-- Row 3: Slim Progress Bar -->
+                    <div class="progress-container">
+                        <div id="hud-progress-bar" class="progress-fill" style="width: 48%;"></div>
+                    </div>
+
+                    <!-- Row 4: Clean Centered Lucide Media Controls -->
+                    <div class="controls-row">
+                        <!-- Prev -->
+                        <div class="media-btn" title="Previous Track" onclick="actionPrev()">
+                            <svg viewBox="0 0 24 24"><path d="M19 20L9 12l10-8v16zM5 19V5h2v14H5z"/></svg>
+                        </div>
+                        <!-- Play/Pause -->
+                        <div class="media-btn" id="hud-btn-play" title="Play / Pause" onclick="togglePlayPause()">
+                            <svg id="svg-pause" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                            <svg id="svg-play" viewBox="0 0 24 24" style="display:none;"><path d="M8 5v14l11-7z"/></svg>
+                        </div>
+                        <!-- Next -->
+                        <div class="media-btn" title="Next Track" onclick="actionNext()">
+                            <svg viewBox="0 0 24 24"><path d="M5 4l10 8-10 8V4zm12 1v14h2V5h-2z"/></svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Layout Specs Breakdown -->
+    <div class="hud-specs-card">
+        <div class="spec-item">
+            <span class="label">📐 Card Dimensions</span>
+            <span class="value">320px Wide × 76px High</span>
+            <span class="desc">Compact retro HUD, no collision with top hotbar.</span>
+        </div>
+        <div class="spec-item">
+            <span class="label">🖼️ Album Cover</span>
+            <span class="value">60px × 60px (Flush)</span>
+            <span class="desc">Matches 100% of internal height; zero wasted empty space.</span>
+        </div>
+        <div class="spec-item">
+            <span class="label">🎛️ Media Controls</span>
+            <span class="value">Lucide Vector-to-Pixel</span>
+            <span class="desc">Clean icons (Prev, Play/Pause, Next) with hover glow.</span>
+        </div>
+        <div class="spec-item">
+            <span class="label">⚡ Rusted Layout</span>
+            <span class="value">Taffy Flexbox v0.7</span>
+            <span class="desc">Strict overflow-hidden; zero clipping or text jumping.</span>
+        </div>
+    </div>
+
+    <script>
+        let isPlaying = true;
+        let progress = 48;
+        let currentTrack = 'bitchord';
+
+        const tracks = {
+            bitchord: {
+                title: "Танцуй (Slowed)",
+                artist: "ARGOMANIA",
+                time: "1:15 / 2:38",
+                art: "https://yt3.googleusercontent.com/RmHM2phNSlll4HndEybQzm8QRMAGqiNXe-MWjUbFMtA0UL2UDqm-y3GXT3roeb1dIIy4IOQ41jq3iSPH=w544-h544-l90-rj"
+            },
+            ace: {
+                title: "The Sign",
+                artist: "Ace of Base",
+                time: "0:58 / 3:11",
+                art: "https://upload.wikimedia.org/wikipedia/en/2/2f/The_Sign_single_cover.jpg"
+            },
+            soska: {
+                title: "Чёрная машина",
+                artist: "SOSKA 69",
+                time: "0:42 / 2:10",
+                art: "https://yt3.googleusercontent.com/wTGG8zHGXkbEfExinlvqXYSUPYyVm1OUclI2nTvmbfo9mXKP4-OQnZiVe8h4zg-EHOxdMpdZV9Vijg-vEQ=w544-h544-l90-rj"
+            },
+            idle: {
+                title: "Not Running",
+                artist: "Music Player",
+                time: "0:00 / 0:00",
+                art: null
+            }
+        };
+
+        function changeTheme(themeName) {
+            const card = document.getElementById('hud-card');
+            card.className = `music-card theme-${themeName}`;
+        }
+
+        function changeTrack(key) {
+            currentTrack = key;
+            const t = tracks[key];
+            document.getElementById('hud-title').innerText = t.title;
+            document.getElementById('hud-artist').innerText = t.artist;
+            document.getElementById('hud-time').innerText = t.time;
+
+            const artImg = document.getElementById('hud-art');
+            const fallback = document.getElementById('hud-fallback-icon');
+
+            if (t.art) {
+                artImg.src = t.art;
+                artImg.style.display = 'block';
+                fallback.style.display = 'none';
+            } else {
+                artImg.style.display = 'none';
+                fallback.style.display = 'block';
+            }
+
+            if (key === 'idle') {
+                isPlaying = false;
+                updatePlayState();
+            }
+        }
+
+        function togglePlayPause() {
+            isPlaying = !isPlaying;
+            updatePlayState();
+        }
+
+        function updatePlayState() {
+            const svgPause = document.getElementById('svg-pause');
+            const svgPlay = document.getElementById('svg-play');
+            const btn = document.getElementById('btn-toggle-play');
+            const eq = document.getElementById('eq-container');
+
+            if (isPlaying) {
+                svgPause.style.display = 'block';
+                svgPlay.style.display = 'none';
+                btn.innerText = '⏸ Pause';
+                eq.style.opacity = '1';
+            } else {
+                svgPause.style.display = 'none';
+                svgPlay.style.display = 'block';
+                btn.innerText = '▶ Play';
+                eq.style.opacity = '0.3';
+            }
+        }
+
+        function actionPrev() {
+            progress = 0;
+            document.getElementById('hud-progress-bar').style.width = '0%';
+        }
+
+        function actionNext() {
+            progress = 0;
+            document.getElementById('hud-progress-bar').style.width = '0%';
+        }
+
+        // Animate Equalizer & Progress smoothly
+        setInterval(() => {
+            if (isPlaying) {
+                // Harmonic jitter
+                const h1 = 3 + Math.floor(Math.random() * 8);
+                const h2 = 4 + Math.floor(Math.random() * 7);
+                const h3 = 2 + Math.floor(Math.random() * 9);
+                document.getElementById('eq1').style.height = `${h1}px`;
+                document.getElementById('eq2').style.height = `${h2}px`;
+                document.getElementById('eq3').style.height = `${h3}px`;
+
+                progress = (progress + 0.15);
+                if (progress > 100) progress = 0;
+                document.getElementById('hud-progress-bar').style.width = `${progress}%`;
+            }
+        }, 120);
+    </script>
+</body>
+</html>

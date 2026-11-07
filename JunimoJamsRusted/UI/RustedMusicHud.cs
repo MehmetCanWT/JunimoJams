@@ -3,13 +3,26 @@ using System.IO;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using JunimoJamsRusted.Services;
-using Rusted.Smapi.Native;
-using Rusted.Smapi.UI;
 using StardewModdingAPI;
 using StardewValley;
 
 namespace JunimoJamsRusted.UI
 {
+    public struct HudThemeColors
+    {
+        public Color Background;
+        public Color Border;
+        public Color BorderHighlight;
+        public Color Title;
+        public Color Artist;
+        public Color Time;
+        public Color ProgressFill;
+        public Color ProgressTrack;
+        public Color IconNormal;
+        public Color IconHover;
+        public bool HasTopHighlight;
+    }
+
     public sealed class RustedMusicHud : IDisposable
     {
         private readonly ModConfig _config;
@@ -18,17 +31,25 @@ namespace JunimoJamsRusted.UI
         private readonly Action _openMenuAction;
         private readonly Action _onStateChangedAction;
 
-        private RustedView? _view;
-        private readonly LruTextureCache _textureCache = new(capacity: 30);
-        private readonly MarqueeController _titleMarquee = new() { MaxVisibleChars = 22 };
-        private readonly MarqueeController _artistMarquee = new() { MaxVisibleChars = 28 };
+        private readonly MarqueeController _titleMarquee = new() { MaxVisibleChars = 20 };
+        private readonly MarqueeController _artistMarquee = new() { MaxVisibleChars = 26 };
         private readonly EqualizerEngine _equalizer = new();
 
+        private Texture2D? _cardBgTexture;
+        private Texture2D? _cardBorderTexture;
+        private Texture2D? _artBgTexture;
+        private Texture2D? _mediaIconsTexture;
         private Texture2D? _roundedArtCache;
         private string _roundedArtCacheKey = string.Empty;
-        private Texture2D? _mediaIconsTexture;
+
         private bool _wasMouseDown;
         private TrackInfo _lastTrack = new();
+
+        public const int CARD_WIDTH = 320;
+        public const int CARD_HEIGHT = 76;
+        public const int ART_SIZE = 60;
+        public const int CORNER_RADIUS = 8;
+        public const int BORDER_WIDTH = 2;
 
         public RustedMusicHud(
             ModConfig config,
@@ -42,177 +63,399 @@ namespace JunimoJamsRusted.UI
             this._musicService = musicService;
             this._openMenuAction = openMenuAction;
             this._onStateChangedAction = onStateChangedAction;
-
-            this.InitializeView();
-        }
-
-        public void InitializeView()
-        {
-            this._view?.Dispose();
-
-            bool followGlobal = string.Equals(this._config.Theme, "FollowGlobal", StringComparison.OrdinalIgnoreCase);
-            this._view = new RustedView(ownerModId: "MehmetCanWT.JunimoJamsRusted", useRustedUiTheme: followGlobal);
-
-            string htmlPath = Path.Combine(this._helper.DirectoryPath, "assets", "ui", "music_hud.html");
-            if (File.Exists(htmlPath))
-            {
-                this._view.LoadMarkupFileWithHotReload(htmlPath);
-            }
-            else
-            {
-                this.BuildFallbackFluentView();
-            }
-
-            this.ApplyConfigTheme();
-
-            // Bind Actions
-            this._view.OnAction("playpause", () =>
-            {
-                this._musicService.TogglePlayPause();
-                this._onStateChangedAction();
-            });
-
-            this._view.OnAction("next", () =>
-            {
-                this._musicService.NextTrack();
-                this._onStateChangedAction();
-            });
-
-            this._view.OnAction("prev", () =>
-            {
-                this._musicService.PreviousTrack();
-                this._onStateChangedAction();
-            });
-
-            this._view.OnAction("open_menu", () =>
-            {
-                this._openMenuAction();
-            });
-        }
-
-        private void BuildFallbackFluentView()
-        {
-            if (this._view == null) return;
-
-            this._view.BuildWithFluent(ui =>
-                ui.Div("w-full h-full flex flex-col justify-start items-start p-4").Children(
-                    ui.Div("flex flex-row items-center w-320 h-80 sdv-box p-2 gap-2 overflow-hidden").Id("music_card").Children(
-                        ui.Div("w-16 h-16 shrink-0 flex items-center justify-center sdv-panel overflow-hidden").Id("album_art_slot").Children(
-                            ui.Icon("sparkles", "lucide-icon lucide-md")
-                        ),
-                        ui.Div("flex flex-col flex-1 h-full justify-between min-w-0").Children(
-                            ui.Div("flex flex-row items-center w-full min-w-0").Children(
-                                ui.Text("Not Running", "font-small text-sdv-brown shadow truncate w-full").Id("track_title")
-                            ),
-                            ui.Div("flex flex-row items-center justify-between w-full min-w-0").Children(
-                                ui.Text("Music Player", "font-tiny text-sdv-dark truncate flex-1 mr-1").Id("track_artist"),
-                                ui.Text("0:00 / 0:00", "font-tiny text-sdv-muted shrink-0").Id("hud_time")
-                            ),
-                            ui.Div("w-full").Id("progress_row").Children(
-                                ui.ProgressBar("hud_progress_bar", 0f, 100f, "w-full h-1.5 sdv-bar")
-                            ),
-                            ui.Div("flex flex-row items-center justify-center gap-6 w-full h-5").Id("controls_row").Children(
-                                ui.Div("w-6 h-5 flex items-center justify-center").Id("btn_prev").OnClick("prev"),
-                                ui.Div("w-6 h-5 flex items-center justify-center").Id("btn_playpause").OnClick("playpause"),
-                                ui.Div("w-6 h-5 flex items-center justify-center").Id("btn_next").OnClick("next")
-                            )
-                        )
-                    )
-                )
-            );
         }
 
         public void ApplyConfigTheme()
         {
-            if (this._view == null) return;
-
-            this._view.SoundEnabled = this._config.EnableUiSounds;
-
-            if (string.Equals(this._config.Theme, "FollowGlobal", StringComparison.OrdinalIgnoreCase))
-            {
-                this._view.UseRustedUiTheme = true;
-                return;
-            }
-
-            this._view.UseRustedUiTheme = false;
-            UiThemeId themeId = this._config.Theme switch
-            {
-                "PelicanClassic" => UiThemeId.PelicanClassic,
-                "ShadcnZincDark" => UiThemeId.ShadcnZincDark,
-                "WizardArcane" => UiThemeId.WizardArcane,
-                "JojaCorp" => UiThemeId.JojaCorp,
-                "CatppuccinMocha" => UiThemeId.CatppuccinMocha,
-                "TokyoNight" => UiThemeId.TokyoNight,
-                "Dracula" => UiThemeId.Dracula,
-                "Nord" => UiThemeId.Nord,
-                "Cyberpunk" => UiThemeId.Cyberpunk,
-                _ => UiThemeId.JunimoForest
-            };
-
-            this._view.SetTheme(themeId);
+            // Re-evaluates theme on config change
         }
 
         public void UpdateTrack(TrackInfo track)
         {
             this._lastTrack = track;
-            if (this._view == null) return;
 
             string normTitle = StringUtils.NormalizeForHud(track.Name);
             string normArtist = StringUtils.NormalizeForHud(track.Artist);
 
             this._titleMarquee.Text = normTitle;
             this._artistMarquee.Text = normArtist;
-
-            string displayTitle = this._config.EnableMarqueeText ? this._titleMarquee.GetVisibleText() : normTitle;
-            string displayArtist = this._config.EnableMarqueeText ? this._artistMarquee.GetVisibleText() : normArtist;
-
-            this._view.SetText("track_title", displayTitle);
-            this._view.SetText("track_artist", displayArtist);
-
-            this._view.SetVisible("controls_row", this._config.ShowPlaybackButtons);
-            this._view.SetVisible("album_art_slot", this._config.ShowAlbumArt);
-            this._view.SetVisible("progress_row", this._config.ShowProgressBar);
-
-            this.UpdateTimelineDisplay(track);
         }
 
         public void UpdatePerTickAnimations()
         {
-            if (this._view == null || this._lastTrack.Name == "Not Running")
+            if (this._lastTrack.Name == "Not Running")
                 return;
 
-            // Update Marquee scrolling
             if (this._config.EnableMarqueeText)
             {
                 this._titleMarquee.Update();
                 this._artistMarquee.Update();
-                this._view.SetText("track_title", this._titleMarquee.GetVisibleText());
-                this._view.SetText("track_artist", this._artistMarquee.GetVisibleText());
             }
-
-            // Update Timeline linear interpolation
-            this.UpdateTimelineDisplay(this._lastTrack);
         }
 
-        private void UpdateTimelineDisplay(TrackInfo track)
+        public bool UpdateInput(float mouseX, float mouseY, bool leftMouseDown)
         {
-            if (this._view == null) return;
+            if (!this._config.ShowHud || !this._config.ShowPlaybackButtons)
+                return false;
 
-            if (track.Duration > TimeSpan.Zero)
+            int cardX = this._config.HudPositionX;
+            int cardY = this._config.HudPositionY;
+
+            Rectangle cardRect = new Rectangle(cardX, cardY, CARD_WIDTH, CARD_HEIGHT);
+            bool isOverCard = cardRect.Contains((int)mouseX, (int)mouseY);
+
+            int ctrlY = cardY + 54;
+            int centerX = cardX + 78 + (234 / 2); // 195
+
+            Rectangle prevHit = new Rectangle(centerX - 44 - 4, ctrlY - 4, 24, 24);
+            Rectangle playHit = new Rectangle(centerX - 8 - 4, ctrlY - 4, 24, 24);
+            Rectangle nextHit = new Rectangle(centerX + 28 - 4, ctrlY - 4, 24, 24);
+
+            bool actionFired = false;
+            if (leftMouseDown && !this._wasMouseDown)
             {
-                TimeSpan currentPos = track.GetExtrapolatedPosition();
-                float percent = (float)(currentPos.TotalSeconds / track.Duration.TotalSeconds) * 100f;
-                this._view.SetProgress("hud_progress_bar", Math.Clamp(percent, 0f, 100f), 100f);
+                if (prevHit.Contains((int)mouseX, (int)mouseY))
+                {
+                    Game1.playSound("smallSelect");
+                    this._musicService.PreviousTrack();
+                    this._onStateChangedAction();
+                    actionFired = true;
+                }
+                else if (playHit.Contains((int)mouseX, (int)mouseY))
+                {
+                    Game1.playSound("smallSelect");
+                    this._musicService.TogglePlayPause();
+                    this._onStateChangedAction();
+                    actionFired = true;
+                }
+                else if (nextHit.Contains((int)mouseX, (int)mouseY))
+                {
+                    Game1.playSound("smallSelect");
+                    this._musicService.NextTrack();
+                    this._onStateChangedAction();
+                    actionFired = true;
+                }
+            }
 
-                string curStr = FormatTime(currentPos);
-                string durStr = FormatTime(track.Duration);
-                this._view.SetText("hud_time", $"{curStr} / {durStr}");
+            this._wasMouseDown = leftMouseDown;
+            return actionFired || (leftMouseDown && isOverCard);
+        }
+
+        public void Draw(SpriteBatch spriteBatch, TrackInfo track)
+        {
+            if (!this._config.ShowHud)
+                return;
+
+            int cardX = this._config.HudPositionX;
+            int cardY = this._config.HudPositionY;
+
+            HudThemeColors colors = GetThemeColors(this._config.Theme);
+            GraphicsDevice device = Game1.graphics.GraphicsDevice;
+
+            this.EnsureTexturesCreated(device);
+
+            // 1. Drop Shadow (4px offset)
+            spriteBatch.Draw(
+                this._cardBgTexture!,
+                new Rectangle(cardX + 4, cardY + 6, CARD_WIDTH, CARD_HEIGHT),
+                Color.Black * 0.45f
+            );
+
+            // 2. Card Background & Border
+            spriteBatch.Draw(
+                this._cardBgTexture!,
+                new Rectangle(cardX, cardY, CARD_WIDTH, CARD_HEIGHT),
+                colors.Background
+            );
+
+            spriteBatch.Draw(
+                this._cardBorderTexture!,
+                new Rectangle(cardX, cardY, CARD_WIDTH, CARD_HEIGHT),
+                colors.Border
+            );
+
+            if (colors.HasTopHighlight)
+            {
+                spriteBatch.Draw(
+                    Game1.staminaRect,
+                    new Rectangle(cardX + CORNER_RADIUS, cardY, CARD_WIDTH - (CORNER_RADIUS * 2), 2),
+                    colors.BorderHighlight
+                );
+            }
+
+            // 3. Album Art Slot (60x60, flush at cardX + 8, cardY + 8)
+            int artX = cardX + 8;
+            int artY = cardY + 8;
+            Rectangle artRect = new Rectangle(artX, artY, ART_SIZE, ART_SIZE);
+
+            spriteBatch.Draw(this._artBgTexture!, artRect, new Color(11, 23, 17));
+
+            if (this._config.ShowAlbumArt && track.CoverArt != null && !track.CoverArt.IsDisposed)
+            {
+                this.DrawRoundedArt(spriteBatch, track.CoverArt, artRect, radius: 4);
             }
             else
             {
-                this._view.SetProgress("hud_progress_bar", 0f, 100f);
-                this._view.SetText("hud_time", "0:00 / 0:00");
+                // Draw elegant Sparkle fallback
+                Vector2 center = new Vector2(artX + 22, artY + 18);
+                spriteBatch.DrawString(Game1.smallFont, "*", center + new Vector2(1, 1), Color.Black * 0.5f, 0f, Vector2.Zero, 1.2f, SpriteEffects.None, 1f);
+                spriteBatch.DrawString(Game1.smallFont, "*", center, colors.BorderHighlight, 0f, Vector2.Zero, 1.2f, SpriteEffects.None, 1f);
             }
+
+            // 4. Content Column (cardX + 78 to cardX + 312, width = 234px)
+            int colX = cardX + 78;
+            int colW = 234;
+
+            // Row 1: Title & Time
+            string displayTitle = this._config.EnableMarqueeText ? this._titleMarquee.GetVisibleText() : StringUtils.NormalizeForHud(track.Name);
+            if (string.IsNullOrWhiteSpace(displayTitle)) displayTitle = "Not Running";
+
+            string timeStr = "0:00 / 0:00";
+            if (track.Duration > TimeSpan.Zero)
+            {
+                TimeSpan currentPos = track.GetExtrapolatedPosition();
+                timeStr = $"{FormatTime(currentPos)} / {FormatTime(track.Duration)}";
+            }
+
+            float timeWidth = Game1.tinyFont.MeasureString(timeStr).X;
+            Vector2 timePos = new Vector2(colX + colW - timeWidth, cardY + 9);
+            spriteBatch.DrawString(Game1.tinyFont, timeStr, timePos + new Vector2(1, 1), Color.Black * 0.7f);
+            spriteBatch.DrawString(Game1.tinyFont, timeStr, timePos, colors.Time);
+
+            // Title with shadow (clipped so it doesn't overlap time)
+            int maxTitleWidth = (int)(colW - timeWidth - 8);
+            Vector2 titlePos = new Vector2(colX, cardY + 8);
+            spriteBatch.DrawString(Game1.smallFont, displayTitle, titlePos + new Vector2(1, 1), Color.Black * 0.85f, 0f, Vector2.Zero, 0.65f, SpriteEffects.None, 1f);
+            spriteBatch.DrawString(Game1.smallFont, displayTitle, titlePos, colors.Title, 0f, Vector2.Zero, 0.65f, SpriteEffects.None, 1f);
+
+            // Row 2: Equalizer & Artist
+            int artistX = colX;
+            if (track.IsPlaying)
+            {
+                this._equalizer.Update(isPlaying: true);
+                float[] bars = this._equalizer.GetBars();
+                int eqY = cardY + 36;
+                for (int i = 0; i < 3; i++)
+                {
+                    int barH = Math.Max(2, (int)(bars[i] * 9f));
+                    Rectangle barRect = new Rectangle(colX + (i * 3), eqY - barH, 2, barH);
+                    spriteBatch.Draw(Game1.staminaRect, barRect, colors.ProgressFill);
+                }
+                artistX += 13;
+            }
+
+            string displayArtist = this._config.EnableMarqueeText ? this._artistMarquee.GetVisibleText() : StringUtils.NormalizeForHud(track.Artist);
+            if (string.IsNullOrWhiteSpace(displayArtist)) displayArtist = "Music Player";
+
+            Vector2 artistPos = new Vector2(artistX, cardY + 25);
+            spriteBatch.DrawString(Game1.tinyFont, displayArtist, artistPos + new Vector2(1, 1), Color.Black * 0.7f, 0f, Vector2.Zero, 1.05f, SpriteEffects.None, 1f);
+            spriteBatch.DrawString(Game1.tinyFont, displayArtist, artistPos, colors.Artist, 0f, Vector2.Zero, 1.05f, SpriteEffects.None, 1f);
+
+            // Row 3: Slim Progress Bar (5px tall)
+            int barY = cardY + 43;
+            Rectangle barTrackRect = new Rectangle(colX, barY, colW, 5);
+            spriteBatch.Draw(Game1.staminaRect, barTrackRect, colors.ProgressTrack);
+
+            // 1px bar border
+            DrawHollowRect(spriteBatch, barTrackRect, Color.White * 0.12f);
+
+            if (track.Duration > TimeSpan.Zero)
+            {
+                TimeSpan curPos = track.GetExtrapolatedPosition();
+                float ratio = Math.Clamp((float)(curPos.TotalSeconds / track.Duration.TotalSeconds), 0f, 1f);
+                int fillWidth = (int)(colW * ratio);
+                if (fillWidth > 0)
+                {
+                    spriteBatch.Draw(Game1.staminaRect, new Rectangle(colX, barY, fillWidth, 5), colors.ProgressFill);
+                }
+            }
+
+            // Row 4: Centered Lucide Media Controls
+            if (this._config.ShowPlaybackButtons)
+            {
+                float mouseX = Game1.getMouseX(ui_scale: true);
+                float mouseY = Game1.getMouseY(ui_scale: true);
+
+                int ctrlY = cardY + 54;
+                int centerX = colX + (colW / 2);
+
+                Rectangle prevRect = new Rectangle(centerX - 44, ctrlY, 16, 16);
+                Rectangle playRect = new Rectangle(centerX - 8, ctrlY, 16, 16);
+                Rectangle nextRect = new Rectangle(centerX + 28, ctrlY, 16, 16);
+
+                Rectangle prevHit = new Rectangle(prevRect.X - 4, prevRect.Y - 4, 24, 24);
+                Rectangle playHit = new Rectangle(playRect.X - 4, playRect.Y - 4, 24, 24);
+                Rectangle nextHit = new Rectangle(nextRect.X - 4, nextRect.Y - 4, 24, 24);
+
+                Color prevCol = prevHit.Contains((int)mouseX, (int)mouseY) ? colors.IconHover : colors.IconNormal;
+                Color playCol = playHit.Contains((int)mouseX, (int)mouseY) ? colors.IconHover : colors.IconNormal;
+                Color nextCol = nextHit.Contains((int)mouseX, (int)mouseY) ? colors.IconHover : colors.IconNormal;
+
+                // Prev (glyph 0: 0..15)
+                spriteBatch.Draw(this._mediaIconsTexture!, prevRect, new Rectangle(0, 0, 16, 16), prevCol);
+
+                // Play / Pause (glyph 1: 16..31 Play, glyph 2: 32..47 Pause)
+                int playSrcX = track.IsPlaying ? 32 : 16;
+                spriteBatch.Draw(this._mediaIconsTexture!, playRect, new Rectangle(playSrcX, 0, 16, 16), playCol);
+
+                // Next (glyph 3: 48..63)
+                spriteBatch.Draw(this._mediaIconsTexture!, nextRect, new Rectangle(48, 0, 16, 16), nextCol);
+            }
+        }
+
+        private static void DrawHollowRect(SpriteBatch sb, Rectangle r, Color color)
+        {
+            sb.Draw(Game1.staminaRect, new Rectangle(r.X, r.Y, r.Width, 1), color);
+            sb.Draw(Game1.staminaRect, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), color);
+            sb.Draw(Game1.staminaRect, new Rectangle(r.X, r.Y, 1, r.Height), color);
+            sb.Draw(Game1.staminaRect, new Rectangle(r.Right - 1, r.Y, 1, r.Height), color);
+        }
+
+        public static HudThemeColors GetThemeColors(string themeName)
+        {
+            return themeName switch
+            {
+                "PelicanClassic" => new HudThemeColors
+                {
+                    Background = new Color(254, 231, 182),
+                    Border = new Color(139, 69, 19),
+                    BorderHighlight = new Color(205, 133, 63),
+                    Title = new Color(74, 40, 16),
+                    Artist = new Color(60, 30, 10),
+                    Time = new Color(139, 69, 19),
+                    ProgressFill = new Color(230, 138, 0),
+                    ProgressTrack = new Color(0, 0, 0, 45),
+                    IconNormal = new Color(74, 40, 16, 220),
+                    IconHover = new Color(139, 69, 19),
+                    HasTopHighlight = false
+                },
+                "ShadcnZincDark" => new HudThemeColors
+                {
+                    Background = new Color(9, 9, 11),
+                    Border = new Color(39, 39, 42),
+                    BorderHighlight = new Color(113, 113, 122),
+                    Title = new Color(250, 250, 250),
+                    Artist = new Color(212, 212, 216),
+                    Time = new Color(161, 161, 170),
+                    ProgressFill = new Color(250, 250, 250),
+                    ProgressTrack = new Color(255, 255, 255, 30),
+                    IconNormal = new Color(212, 212, 216, 200),
+                    IconHover = Color.White,
+                    HasTopHighlight = false
+                },
+                "TokyoNight" => new HudThemeColors
+                {
+                    Background = new Color(26, 27, 38),
+                    Border = new Color(122, 162, 247),
+                    BorderHighlight = new Color(187, 154, 247),
+                    Title = new Color(122, 162, 247),
+                    Artist = new Color(192, 202, 245),
+                    Time = new Color(125, 207, 255),
+                    ProgressFill = new Color(122, 162, 247),
+                    ProgressTrack = new Color(0, 0, 0, 100),
+                    IconNormal = new Color(192, 202, 245, 200),
+                    IconHover = Color.White,
+                    HasTopHighlight = false
+                },
+                "CatppuccinMocha" => new HudThemeColors
+                {
+                    Background = new Color(30, 30, 46),
+                    Border = new Color(203, 166, 247),
+                    BorderHighlight = new Color(245, 194, 231),
+                    Title = new Color(203, 166, 247),
+                    Artist = new Color(205, 214, 244),
+                    Time = new Color(137, 220, 235),
+                    ProgressFill = new Color(203, 166, 247),
+                    ProgressTrack = new Color(0, 0, 0, 100),
+                    IconNormal = new Color(205, 214, 244, 200),
+                    IconHover = Color.White,
+                    HasTopHighlight = false
+                },
+                "Dracula" => new HudThemeColors
+                {
+                    Background = new Color(40, 42, 54),
+                    Border = new Color(189, 147, 249),
+                    BorderHighlight = new Color(255, 121, 198),
+                    Title = new Color(255, 121, 198),
+                    Artist = new Color(248, 248, 242),
+                    Time = new Color(80, 250, 123),
+                    ProgressFill = new Color(189, 147, 249),
+                    ProgressTrack = new Color(0, 0, 0, 100),
+                    IconNormal = new Color(248, 248, 242, 200),
+                    IconHover = Color.White,
+                    HasTopHighlight = false
+                },
+                "Nord" => new HudThemeColors
+                {
+                    Background = new Color(46, 52, 64),
+                    Border = new Color(136, 192, 208),
+                    BorderHighlight = new Color(129, 161, 193),
+                    Title = new Color(136, 192, 208),
+                    Artist = new Color(236, 239, 244),
+                    Time = new Color(235, 203, 139),
+                    ProgressFill = new Color(136, 192, 208),
+                    ProgressTrack = new Color(0, 0, 0, 100),
+                    IconNormal = new Color(236, 239, 244, 200),
+                    IconHover = Color.White,
+                    HasTopHighlight = false
+                },
+                "Cyberpunk" => new HudThemeColors
+                {
+                    Background = new Color(10, 6, 22),
+                    Border = new Color(0, 240, 255),
+                    BorderHighlight = new Color(252, 238, 10),
+                    Title = new Color(252, 238, 10),
+                    Artist = new Color(228, 228, 231),
+                    Time = new Color(0, 240, 255),
+                    ProgressFill = new Color(0, 240, 255),
+                    ProgressTrack = new Color(0, 0, 0, 120),
+                    IconNormal = new Color(0, 240, 255, 200),
+                    IconHover = Color.White,
+                    HasTopHighlight = true
+                },
+                "WizardArcane" => new HudThemeColors
+                {
+                    Background = new Color(15, 8, 29),
+                    Border = new Color(168, 85, 247),
+                    BorderHighlight = new Color(245, 158, 11),
+                    Title = new Color(245, 158, 11),
+                    Artist = new Color(233, 213, 255),
+                    Time = new Color(168, 85, 247),
+                    ProgressFill = new Color(168, 85, 247),
+                    ProgressTrack = new Color(0, 0, 0, 100),
+                    IconNormal = new Color(233, 213, 255, 200),
+                    IconHover = Color.White,
+                    HasTopHighlight = false
+                },
+                "JojaCorp" => new HudThemeColors
+                {
+                    Background = new Color(15, 23, 42),
+                    Border = new Color(56, 189, 248),
+                    BorderHighlight = new Color(2, 132, 199),
+                    Title = new Color(56, 189, 248),
+                    Artist = new Color(241, 245, 249),
+                    Time = new Color(148, 163, 184),
+                    ProgressFill = new Color(56, 189, 248),
+                    ProgressTrack = new Color(0, 0, 0, 100),
+                    IconNormal = new Color(241, 245, 249, 200),
+                    IconHover = Color.White,
+                    HasTopHighlight = false
+                },
+                _ => new HudThemeColors // JunimoForest
+                {
+                    Background = new Color(20, 38, 28),
+                    Border = new Color(74, 124, 89),
+                    BorderHighlight = new Color(134, 239, 172),
+                    Title = new Color(253, 224, 71), // Star Gold
+                    Artist = new Color(209, 213, 219),
+                    Time = new Color(134, 239, 172), // Mint Green
+                    ProgressFill = new Color(134, 239, 172),
+                    ProgressTrack = new Color(0, 0, 0, 110),
+                    IconNormal = new Color(228, 228, 231, 210),
+                    IconHover = Color.White,
+                    HasTopHighlight = true
+                }
+            };
         }
 
         private static string FormatTime(TimeSpan span)
@@ -222,125 +465,114 @@ namespace JunimoJamsRusted.UI
             return $"{span.Minutes}:{span.Seconds:D2}";
         }
 
-        public bool UpdateInput(float mouseX, float mouseY, bool leftMouseDown)
+        private void EnsureTexturesCreated(GraphicsDevice device)
         {
-            if (this._view == null) return false;
-
-            int cardX = this._config.HudPositionX;
-            int cardY = this._config.HudPositionY;
-            int ctrlY = cardY + 54;
-
-            Rectangle prevHit = new Rectangle(cardX + 148, ctrlY - 4, 24, 24);
-            Rectangle playHit = new Rectangle(cardX + 182, ctrlY - 4, 24, 24);
-            Rectangle nextHit = new Rectangle(cardX + 216, ctrlY - 4, 24, 24);
-
-            bool handled = false;
-            if (leftMouseDown && !this._wasMouseDown)
+            if (this._cardBgTexture == null || this._cardBgTexture.IsDisposed)
             {
-                if (prevHit.Contains((int)mouseX, (int)mouseY))
-                {
-                    this._musicService.PreviousTrack();
-                    this._onStateChangedAction();
-                    handled = true;
-                }
-                else if (playHit.Contains((int)mouseX, (int)mouseY))
-                {
-                    this._musicService.TogglePlayPause();
-                    this._onStateChangedAction();
-                    handled = true;
-                }
-                else if (nextHit.Contains((int)mouseX, (int)mouseY))
-                {
-                    this._musicService.NextTrack();
-                    this._onStateChangedAction();
-                    handled = true;
-                }
+                this._cardBgTexture = CreateRoundedCardTexture(device, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
             }
 
-            this._wasMouseDown = leftMouseDown;
-
-            bool viewHandled = this._view.UpdateInput(mouseX, mouseY, leftMouseDown, 0f);
-            return handled || viewHandled;
-        }
-
-        public void Draw(SpriteBatch spriteBatch, TrackInfo track)
-        {
-            if (this._view == null) return;
-
-            // 1. Render RustedUI base layout (Taffy flexbox, theme window, typography, progress bar)
-            this._view.Draw(spriteBatch);
-
-            int cardX = this._config.HudPositionX;
-            int cardY = this._config.HudPositionY;
-
-            // 2. Overlay High-Resolution Album Art (flush 64x64 inside slot at cardX + 8, cardY + 8)
-            if (this._config.ShowAlbumArt && track.CoverArt != null && !track.CoverArt.IsDisposed)
+            if (this._cardBorderTexture == null || this._cardBorderTexture.IsDisposed)
             {
-                Rectangle artRect = new Rectangle(cardX + 8, cardY + 8, 64, 64);
-                this.DrawRoundedArt(spriteBatch, track.CoverArt, artRect, radius: 4);
+                this._cardBorderTexture = CreateRoundedBorderTexture(device, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS, BORDER_WIDTH);
             }
 
-            // 3. Draw Animated Equalizer Bars when track is playing (Image 1 aesthetic)
-            if (track.IsPlaying)
+            if (this._artBgTexture == null || this._artBgTexture.IsDisposed)
             {
-                this._equalizer.Update(isPlaying: true);
-                float[] bars = this._equalizer.GetBars();
-                int eqX = cardX + 78;
-                int eqY = cardY + 36;
-                for (int i = 0; i < 3; i++)
-                {
-                    int barHeight = Math.Max(2, (int)(bars[i] * 8f));
-                    Rectangle barRect = new Rectangle(eqX + (i * 3), eqY - barHeight + 6, 2, barHeight);
-                    spriteBatch.Draw(Game1.staminaRect, barRect, new Color(134, 239, 172, 220));
-                }
+                this._artBgTexture = CreateRoundedCardTexture(device, ART_SIZE, ART_SIZE, r: 4);
             }
 
-            // 4. Draw Lucide Media Control Icons (Prev, Play/Pause, Next)
-            if (this._config.ShowPlaybackButtons)
+            if (this._mediaIconsTexture == null || this._mediaIconsTexture.IsDisposed)
             {
-                Texture2D atlas = this.GetOrCreateMediaIconsTexture();
-                float mouseX = Game1.getMouseX(ui_scale: true);
-                float mouseY = Game1.getMouseY(ui_scale: true);
-
-                int ctrlY = cardY + 54;
-                Rectangle prevRect = new Rectangle(cardX + 152, ctrlY, 16, 16);
-                Rectangle playRect = new Rectangle(cardX + 186, ctrlY, 16, 16);
-                Rectangle nextRect = new Rectangle(cardX + 220, ctrlY, 16, 16);
-
-                Rectangle prevHit = new Rectangle(prevRect.X - 4, prevRect.Y - 4, 24, 24);
-                Rectangle playHit = new Rectangle(playRect.X - 4, playRect.Y - 4, 24, 24);
-                Rectangle nextHit = new Rectangle(nextRect.X - 4, nextRect.Y - 4, 24, 24);
-
-                Color normalColor = new Color(210, 220, 220, 220);
-                Color hoverColor = Color.White;
-
-                // Draw Prev (glyph 0)
-                Color prevCol = prevHit.Contains((int)mouseX, (int)mouseY) ? hoverColor : normalColor;
-                spriteBatch.Draw(atlas, prevRect, new Rectangle(0, 0, 16, 16), prevCol);
-
-                // Draw Play / Pause (glyph 1 = Play, glyph 2 = Pause)
-                int playSrcX = track.IsPlaying ? 32 : 16;
-                Color playCol = playHit.Contains((int)mouseX, (int)mouseY) ? hoverColor : normalColor;
-                spriteBatch.Draw(atlas, playRect, new Rectangle(playSrcX, 0, 16, 16), playCol);
-
-                // Draw Next (glyph 3)
-                Color nextCol = nextHit.Contains((int)mouseX, (int)mouseY) ? hoverColor : normalColor;
-                spriteBatch.Draw(atlas, nextRect, new Rectangle(48, 0, 16, 16), nextCol);
+                this._mediaIconsTexture = CreateMediaIconsAtlas(device);
             }
         }
 
-        private Texture2D GetOrCreateMediaIconsTexture()
+        private static Texture2D CreateRoundedCardTexture(GraphicsDevice device, int w, int h, int r)
         {
-            if (this._mediaIconsTexture != null && !this._mediaIconsTexture.IsDisposed)
-                return this._mediaIconsTexture;
+            Color[] pixels = new Color[w * h];
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    int cx = (x < w / 2) ? r : w - 1 - r;
+                    int cy = (y < h / 2) ? r : h - 1 - r;
+                    float dx = x - cx;
+                    float dy = y - cy;
+                    bool inCornerZone = (x < r || x >= w - r) && (y < r || y >= h - r);
+                    if (inCornerZone && (dx * dx + dy * dy) > (float)(r * r))
+                    {
+                        pixels[y * w + x] = Color.Transparent;
+                    }
+                    else
+                    {
+                        pixels[y * w + x] = Color.White;
+                    }
+                }
+            }
+            Texture2D tex = new Texture2D(device, w, h);
+            tex.SetData(pixels);
+            return tex;
+        }
 
+        private static Texture2D CreateRoundedBorderTexture(GraphicsDevice device, int w, int h, int r, int bw)
+        {
+            Color[] pixels = new Color[w * h];
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    int cx = (x < w / 2) ? r : w - 1 - r;
+                    int cy = (y < h / 2) ? r : h - 1 - r;
+                    float dx = x - cx;
+                    float dy = y - cy;
+                    bool inCornerZone = (x < r || x >= w - r) && (y < r || y >= h - r);
+                    bool insideOuter = !inCornerZone || (dx * dx + dy * dy) <= (float)(r * r);
+
+                    if (!insideOuter)
+                    {
+                        pixels[y * w + x] = Color.Transparent;
+                        continue;
+                    }
+
+                    bool inOuterBorder = x < bw || x >= w - bw || y < bw || y >= h - bw;
+                    if (inOuterBorder)
+                    {
+                        pixels[y * w + x] = Color.White;
+                    }
+                    else
+                    {
+                        int ir = Math.Max(1, r - bw);
+                        int icx = (x < w / 2) ? r : w - 1 - r;
+                        int icy = (y < h / 2) ? r : h - 1 - r;
+                        float idx = x - icx;
+                        float idy = y - icy;
+                        bool inInnerCorner = (x < r || x >= w - r) && (y < r || y >= h - r);
+                        if (inInnerCorner && (idx * idx + idy * idy) > (float)(ir * ir))
+                        {
+                            pixels[y * w + x] = Color.White;
+                        }
+                        else
+                        {
+                            pixels[y * w + x] = Color.Transparent;
+                        }
+                    }
+                }
+            }
+            Texture2D tex = new Texture2D(device, w, h);
+            tex.SetData(pixels);
+            return tex;
+        }
+
+        private static Texture2D CreateMediaIconsAtlas(GraphicsDevice device)
+        {
             const int width = 64;
             const int height = 16;
             Color[] pixels = new Color[width * height];
 
             string[][] glyphs = new[]
             {
-                // 0: Prev (vertical bar + left-pointing triangle)
+                // 0: Prev (vertical bar + left triangle)
                 new[] {
                     "................",
                     "................",
@@ -359,7 +591,7 @@ namespace JunimoJamsRusted.UI
                     "................",
                     "................"
                 },
-                // 1: Play (right-pointing triangle)
+                // 1: Play (right triangle)
                 new[] {
                     "................",
                     "................",
@@ -378,7 +610,7 @@ namespace JunimoJamsRusted.UI
                     "................",
                     "................"
                 },
-                // 2: Pause (two vertical bars)
+                // 2: Pause (two bars)
                 new[] {
                     "................",
                     "................",
@@ -397,7 +629,7 @@ namespace JunimoJamsRusted.UI
                     "................",
                     "................"
                 },
-                // 3: Next (right-pointing triangle + vertical bar)
+                // 3: Next (right triangle + vertical bar)
                 new[] {
                     "................",
                     "................",
@@ -435,9 +667,8 @@ namespace JunimoJamsRusted.UI
                 }
             }
 
-            Texture2D tex = new Texture2D(Game1.graphics.GraphicsDevice, width, height);
+            Texture2D tex = new Texture2D(device, width, height);
             tex.SetData(pixels);
-            this._mediaIconsTexture = tex;
             return tex;
         }
 
@@ -466,7 +697,6 @@ namespace JunimoJamsRusted.UI
             float sx = (float)source.Width / w;
             float sy = (float)source.Height / h;
 
-            // Fast box downsampling
             for (int y = 0; y < h; y++)
             {
                 for (int x = 0; x < w; x++)
@@ -499,16 +729,20 @@ namespace JunimoJamsRusted.UI
 
         public void Dispose()
         {
-            this._view?.Dispose();
-            this._view = null;
+            this._cardBgTexture?.Dispose();
+            this._cardBgTexture = null;
 
-            this._roundedArtCache?.Dispose();
-            this._roundedArtCache = null;
+            this._cardBorderTexture?.Dispose();
+            this._cardBorderTexture = null;
+
+            this._artBgTexture?.Dispose();
+            this._artBgTexture = null;
 
             this._mediaIconsTexture?.Dispose();
             this._mediaIconsTexture = null;
 
-            this._textureCache.Dispose();
+            this._roundedArtCache?.Dispose();
+            this._roundedArtCache = null;
         }
     }
 }
