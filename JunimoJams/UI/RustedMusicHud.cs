@@ -31,8 +31,7 @@ namespace JunimoJams.UI
         private readonly Action _openMenuAction;
         private readonly Action _onStateChangedAction;
 
-        private readonly SmoothPixelMarquee _titleMarquee = new();
-        private readonly SmoothPixelMarquee _artistMarquee = new();
+        private readonly SynchronizedHudMarquee _marquee = new();
         private readonly EqualizerEngine _equalizer = new();
 
         private static readonly string[] AsciiStrings = new string[128];
@@ -85,12 +84,7 @@ namespace JunimoJams.UI
         public void UpdateTrack(TrackInfo track)
         {
             this._lastTrack = track;
-
-            string normTitle = StringUtils.NormalizeForHud(track.Name);
-            string normArtist = StringUtils.NormalizeForHud(track.Artist);
-
-            this._titleMarquee.Text = normTitle;
-            this._artistMarquee.Text = normArtist;
+            this._marquee.Reset();
         }
 
         private void EnsureFontsLoaded()
@@ -141,10 +135,9 @@ namespace JunimoJams.UI
                 var (font, titleScale, artistScale, timeScale) = this.GetFontAndScales(s);
 
                 // Title measurements
-                string title = string.IsNullOrWhiteSpace(this._lastTrack.Name) ? "Not Running" : this._lastTrack.Name;
+                string title = string.IsNullOrWhiteSpace(this._lastTrack.Name) ? "Not Running" : StringUtils.NormalizeForHud(this._lastTrack.Name);
                 float titlePixelWidth = font.MeasureString(title).X * titleScale;
                 float maxTitleWidth = 228f * s;
-                this._titleMarquee.Update(titlePixelWidth, maxTitleWidth);
 
                 // Time width in Row 2
                 string timeStr = "0:00 / 0:00";
@@ -156,11 +149,12 @@ namespace JunimoJams.UI
                 float timeWidth = font.MeasureString(timeStr).X * timeScale;
 
                 // Artist measurements
-                string artist = string.IsNullOrWhiteSpace(this._lastTrack.Artist) ? "Music Player" : this._lastTrack.Artist;
+                string artist = string.IsNullOrWhiteSpace(this._lastTrack.Artist) ? "Music Player" : StringUtils.NormalizeForHud(this._lastTrack.Artist);
                 float artistPixelWidth = font.MeasureString(artist).X * artistScale;
                 float eqWidth = this._lastTrack.IsPlaying ? (13f * s) : 0f;
                 float maxArtistWidth = Math.Max(30f * s, (228f * s) - timeWidth - (8f * s) - eqWidth);
-                this._artistMarquee.Update(artistPixelWidth, maxArtistWidth);
+
+                this._marquee.Update(title, titlePixelWidth, maxTitleWidth, artist, artistPixelWidth, maxArtistWidth);
             }
         }
 
@@ -265,7 +259,7 @@ namespace JunimoJams.UI
             if (string.IsNullOrWhiteSpace(displayTitle)) displayTitle = "Not Running";
 
             float titlePixelWidth = font.MeasureString(displayTitle).X * titleScale;
-            float titleOffset = (this._config.EnableMarqueeText && titlePixelWidth > colW) ? this._titleMarquee.PixelOffset : 0f;
+            float titleOffset = (this._config.EnableMarqueeText && titlePixelWidth > colW) ? this._marquee.TitleOffset : 0f;
 
             Vector2 titlePos = new Vector2(colX - titleOffset, cardY + (8 * s));
             DrawBoundedString(spriteBatch, font, displayTitle, titlePos, titleScale, colors.Title, Color.Black * 0.85f, colX, colX + colW);
@@ -287,7 +281,7 @@ namespace JunimoJams.UI
 
             float artistPixelWidth = font.MeasureString(displayArtist).X * artistScale;
             int maxArtistWidth = Math.Max(30, (int)(timePos.X - artistX - (8 * s)));
-            float artistOffset = (this._config.EnableMarqueeText && artistPixelWidth > maxArtistWidth) ? this._artistMarquee.PixelOffset : 0f;
+            float artistOffset = (this._config.EnableMarqueeText && artistPixelWidth > maxArtistWidth) ? this._marquee.ArtistOffset : 0f;
 
             Vector2 artistPos = new Vector2(artistX - artistOffset, cardY + (28 * s));
             DrawBoundedString(spriteBatch, font, displayArtist, artistPos, artistScale, colors.Artist, Color.Black * 0.7f, artistX, timePos.X - (8 * s));

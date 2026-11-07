@@ -340,6 +340,7 @@ namespace JunimoJams.Services.Platform
             if (this._socket == null || string.IsNullOrEmpty(this._activePlayer))
                 return;
 
+            bool hadNavigation = false;
             while (this._commandQueue.TryDequeue(out MprisCommandType cmd))
             {
                 string member = cmd switch
@@ -349,6 +350,11 @@ namespace JunimoJams.Services.Platform
                     MprisCommandType.Previous => "Previous",
                     _ => "PlayPause"
                 };
+
+                if (cmd == MprisCommandType.Next || cmd == MprisCommandType.Previous)
+                {
+                    hadNavigation = true;
+                }
 
                 this.Log($"Sending MPRIS command '{member}' to {this._activePlayer}...", LogLevel.Debug);
 
@@ -374,6 +380,12 @@ namespace JunimoJams.Services.Platform
                     this.CloseSocket();
                     break;
                 }
+            }
+
+            if (hadNavigation)
+            {
+                // Brief yield to allow the media player to emit PropertiesChanged signal
+                Thread.Sleep(200);
             }
         }
 
@@ -409,6 +421,13 @@ namespace JunimoJams.Services.Platform
                 this.SendMethodCall(this._activePlayer, "/org/mpris/MediaPlayer2", "org.freedesktop.DBus.Properties", "Get", "ss",
                     EncodeStringPropertyArgs("org.mpris.MediaPlayer2.Player", "Metadata"));
                 byte[]? metaReply = this.ReceiveMethodReply();
+
+                if (metaReply == null && this._latestTrack.Name != "Not Running" && this._latestTrack.Name != "Unknown")
+                {
+                    // If player is minimized to tray, method calls can be delayed; retain current track and update playing status
+                    this._latestTrack.IsPlaying = isPlaying;
+                    return;
+                }
 
                 string title = "Unknown";
                 string artist = "Unknown";
@@ -565,11 +584,7 @@ namespace JunimoJams.Services.Platform
             byte msgType = msg[1];
             if (msgType == 4) // SIGNAL (PropertiesChanged or NameOwnerChanged)
             {
-                if ((DateTime.UtcNow - this._lastPollTime).TotalMilliseconds >= 500)
-                {
-                    this._lastPollTime = DateTime.UtcNow;
-                    this.RefreshPlayerState();
-                }
+                this.ProcessSignal(msg);
             }
 
             return true;
@@ -579,7 +594,7 @@ namespace JunimoJams.Services.Platform
         {
             if (this._socket == null) return null;
 
-            // Wait for METHOD_RETURN (type 2) or ERROR (type 3). If signals arrive while waiting, ignore and keep waiting.
+            // Wait for METHOD_RETURN (type 2) or ERROR (type 3). If signals arrive while waiting, process them and keep waiting.
             for (int attempt = 0; attempt < 5; attempt++)
             {
                 byte[]? msg = this.ReceiveSingleMessage();
@@ -597,12 +612,174 @@ namespace JunimoJams.Services.Platform
                 }
                 else if (msgType == 4) // SIGNAL
                 {
-                    // Signal arrived while waiting for reply; ignore and keep waiting
+                    // Signal arrived while waiting for reply; process it so it is never dropped
+                    this.ProcessSignal(msg);
                     continue;
                 }
             }
 
             return null;
+        }
+
+        private void ProcessSignal(byte[] msg)
+        {
+            try
+            {
+                string? member = GetHeaderString(msg, 3); // Header field 3 is MEMBER
+                if (member == "PropertiesChanged")
+                {
+                    this.ParsePropertiesChangedSignal(msg);
+                }
+                else if (member == "NameOwnerChanged")
+                {
+                    this.DetectActivePlayer();
+                }
+            }
+            catch (Exception ex)
+            {
+                this.Log($"Error processing D-Bus signal: {ex.Message}", LogLevel.Trace);
+            }
+        }
+
+        private void ParsePropertiesChangedSignal(byte[] b)
+        {
+            int bodyStart = GetBodyStart(b);
+            if (bodyStart >= b.Length) return;
+
+            int pos = bodyStart;
+
+            // 1. Skip interface string
+            int rem = pos % 4;
+            if (rem != 0) pos += (4 - rem);
+            if (pos + 4 > b.Length) return;
+            uint ifaceLen = BitConverter.ToUInt32(b, pos);
+            pos += 4;
+            if (pos + ifaceLen > b.Length) return;
+            string iface = Encoding.UTF8.GetString(b, pos, (int)ifaceLen);
+            pos += (int)ifaceLen + 1;
+
+            if (iface != "org.mpris.MediaPlayer2.Player")
+                return;
+
+            // 2. Read changed_properties array (a{sv})
+            rem = pos % 4;
+            if (rem != 0) pos += (4 - rem);
+            if (pos + 4 > b.Length) return;
+            uint arrLen = BitConverter.ToUInt32(b, pos);
+            pos += 4;
+            int endPos = pos + (int)arrLen;
+
+            bool stateChanged = false;
+            string? newStatus = null;
+            Dictionary<string, object>? metaDict = null;
+
+            while (pos < endPos && pos + 8 <= b.Length)
+            {
+                rem = pos % 8;
+                if (rem != 0) pos += (8 - rem);
+                if (pos >= endPos) break;
+
+                uint kLen = BitConverter.ToUInt32(b, pos);
+                pos += 4;
+                if (pos + kLen > b.Length) break;
+                string key = Encoding.UTF8.GetString(b, pos, (int)kLen);
+                pos += (int)kLen + 1;
+
+                if (pos >= b.Length) break;
+                int vSigLen = b[pos++];
+                if (pos + vSigLen > b.Length) break;
+                string vSig = Encoding.ASCII.GetString(b, pos, vSigLen);
+                pos += vSigLen + 1;
+
+                if (key == "PlaybackStatus" && vSig == "s")
+                {
+                    rem = pos % 4;
+                    if (rem != 0) pos += (4 - rem);
+                    if (pos + 4 <= b.Length)
+                    {
+                        uint sLen = BitConverter.ToUInt32(b, pos);
+                        pos += 4;
+                        if (pos + sLen <= b.Length)
+                        {
+                            newStatus = Encoding.UTF8.GetString(b, pos, (int)sLen);
+                            pos += (int)sLen + 1;
+                            stateChanged = true;
+                        }
+                    }
+                }
+                else if (key == "Metadata" && vSig == "a{sv}")
+                {
+                    metaDict = ParseMetadataDictFromPos(b, ref pos);
+                    stateChanged = true;
+                }
+                else
+                {
+                    pos += 4;
+                }
+            }
+
+            if (stateChanged)
+            {
+                this.ApplySignalUpdate(newStatus, metaDict);
+            }
+        }
+
+        private void ApplySignalUpdate(string? newStatus, Dictionary<string, object>? metaDict)
+        {
+            bool isPlaying = this._latestTrack.IsPlaying;
+            if (!string.IsNullOrEmpty(newStatus))
+            {
+                isPlaying = string.Equals(newStatus, "Playing", StringComparison.OrdinalIgnoreCase);
+            }
+
+            string title = this._latestTrack.Name;
+            string artist = this._latestTrack.Artist;
+            string album = this._latestTrack.Album;
+            string? artUrl = this._latestTrack.DirectArtUri;
+            TimeSpan duration = this._latestTrack.Duration;
+
+            if (metaDict != null && metaDict.Count > 0)
+            {
+                if (metaDict.TryGetValue("xesam:title", out object? t) && t is string tStr && !string.IsNullOrWhiteSpace(tStr))
+                    title = tStr;
+                if (metaDict.TryGetValue("xesam:artist", out object? a) && a is string aStr && !string.IsNullOrWhiteSpace(aStr))
+                    artist = aStr;
+                if (metaDict.TryGetValue("xesam:album", out object? al) && al is string alStr)
+                    album = alStr;
+                if (metaDict.TryGetValue("mpris:artUrl", out object? u) && u is string uStr)
+                    artUrl = uStr;
+                if (metaDict.TryGetValue("mpris:length", out object? l))
+                {
+                    if (l is long lMicro && lMicro > 0)
+                        duration = TimeSpan.FromMilliseconds(lMicro / 1000.0);
+                    else if (l is int lInt && lInt > 0)
+                        duration = TimeSpan.FromMilliseconds(lInt / 1000.0);
+                }
+            }
+
+            TimeSpan position = TimeSpan.Zero;
+            if (this._latestTrack.Name == title && this._latestTrack.Artist == artist && this._latestTrack.IsPlaying)
+            {
+                position = this._latestTrack.GetExtrapolatedPosition();
+            }
+
+            if (this._latestTrack.Name != title && !string.IsNullOrWhiteSpace(title) && title != "Not Running" && title != "Unknown")
+            {
+                this.Log($"Now Playing (via MPRIS Signal): '{title}' by '{artist}'", LogLevel.Info);
+            }
+
+            this._latestTrack = new TrackInfo
+            {
+                Name = title,
+                Artist = artist,
+                Album = album,
+                IsPlaying = isPlaying,
+                Duration = duration,
+                Position = position,
+                PlaybackRate = isPlaying ? 1.0f : 0.0f,
+                LastPositionUpdateTime = DateTime.UtcNow,
+                DirectArtUri = artUrl
+            };
         }
 
         private byte[]? ReceiveSingleMessage()
@@ -951,16 +1128,53 @@ namespace JunimoJams.Services.Platform
             return BitConverter.ToInt64(b, pos);
         }
 
-        private static Dictionary<string, object> ParseMetadataDict(byte[] b)
+        private static string? GetHeaderString(byte[] b, byte targetCode)
+        {
+            if (b.Length < 16) return null;
+            uint fieldsLen = BitConverter.ToUInt32(b, 12);
+            int pos = 16;
+            int end = 16 + (int)fieldsLen;
+
+            while (pos < end && pos + 2 <= b.Length)
+            {
+                int rem = pos % 8;
+                if (rem != 0) pos += (8 - rem);
+                if (pos >= end || pos >= b.Length) break;
+
+                byte code = b[pos++];
+                if (pos >= b.Length) break;
+                byte vSigLen = b[pos++];
+                if (pos + vSigLen > b.Length) break;
+                string vSig = Encoding.ASCII.GetString(b, pos, vSigLen);
+                pos += vSigLen + 1;
+
+                if (vSig == "s" || vSig == "o")
+                {
+                    rem = pos % 4;
+                    if (rem != 0) pos += (4 - rem);
+                    if (pos + 4 > b.Length) break;
+                    uint valLen = BitConverter.ToUInt32(b, pos);
+                    pos += 4;
+                    if (pos + valLen <= b.Length)
+                    {
+                        string val = Encoding.UTF8.GetString(b, pos, (int)valLen);
+                        pos += (int)valLen + 1;
+                        if (code == targetCode)
+                            return val;
+                    }
+                }
+                else
+                {
+                    pos += 4;
+                }
+            }
+
+            return null;
+        }
+
+        private static Dictionary<string, object> ParseMetadataDictFromPos(byte[] b, ref int pos)
         {
             var dict = new Dictionary<string, object>();
-            int bodyStart = GetBodyStart(b);
-            if (bodyStart >= b.Length) return dict;
-
-            int pos = bodyStart;
-            int sigLen = b[pos];
-            pos += 1 + sigLen + 1;
-
             int rem = pos % 4;
             if (rem != 0) pos += (4 - rem);
             if (pos + 4 > b.Length) return dict;
@@ -1051,6 +1265,7 @@ namespace JunimoJams.Services.Platform
                             pos += (int)itemLen + 1;
                         }
                     }
+                    pos = asEnd;
                     dict[key] = string.Join(", ", strList);
                 }
                 else
@@ -1059,7 +1274,20 @@ namespace JunimoJams.Services.Platform
                 }
             }
 
+            pos = endPos;
             return dict;
+        }
+
+        private static Dictionary<string, object> ParseMetadataDict(byte[] b)
+        {
+            int bodyStart = GetBodyStart(b);
+            if (bodyStart >= b.Length) return new Dictionary<string, object>();
+
+            int pos = bodyStart;
+            int sigLen = b[pos];
+            pos += 1 + sigLen + 1;
+
+            return ParseMetadataDictFromPos(b, ref pos);
         }
 
         private static int GetBodyStart(byte[] b)
