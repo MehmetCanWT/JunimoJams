@@ -15,8 +15,8 @@ namespace JunimoJamsRusted
         /// </summary>
         public string Theme { get; set; } = "JunimoForest";
 
-        public int HudPositionX { get; set; } = 20;
-        public int HudPositionY { get; set; } = 20;
+        public int HudPositionX { get; set; } = 16;
+        public int HudPositionY { get; set; } = 16;
 
         public bool ShowAlbumArt { get; set; } = true;
         public bool ShowPlaybackButtons { get; set; } = true;

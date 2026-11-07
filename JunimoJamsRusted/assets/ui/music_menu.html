@@ -7,7 +7,7 @@
                 <icon name="sparkles" class="lucide-icon lucide-md" />
                 <span class="font-dialogue text-sdv-brown shadow">Junimo Jams Music Hub</span>
             </banner>
-            <close-button id="btn_close" on:click="close_menu" tooltip="Close [ESC]" />
+            <close-button id="btn_close" on:click="close_menu" />
         </div>
 
         <!-- Now Playing Card -->
@@ -23,7 +23,7 @@
                 </div>
             </div>
             <span id="menu_track_title" class="font-dialogue text-sdv-brown shadow">No Track Playing</span>
-            <span id="menu_track_artist" class="font-small text-sdv-dark">Start Spotify, YouTube Music, or desktop player</span>
+            <span id="menu_track_artist" class="font-small text-sdv-dark">Start Spotify, YouTube Music, BitChord, or desktop player</span>
 
             <!-- Track Timeline Progress Bar -->
             <div class="w-full py-1">
@@ -32,9 +32,9 @@
 
             <!-- Controls Row -->
             <div class="flex flex-row items-center justify-center gap-4 w-full pt-2">
-                <button id="btn_menu_prev" class="sdv-btn px-4" on:click="prev" tooltip="Previous Track">|&lt; Prev</button>
-                <button id="btn_menu_playpause" class="sdv-btn px-6" on:click="playpause" tooltip="Play / Pause">Play</button>
-                <button id="btn_menu_next" class="sdv-btn px-4" on:click="next" tooltip="Next Track">Next &gt;|</button>
+                <button id="btn_menu_prev" class="sdv-btn px-4" on:click="prev">|&lt; Prev</button>
+                <button id="btn_menu_playpause" class="sdv-btn px-6" on:click="playpause">Play</button>
+                <button id="btn_menu_next" class="sdv-btn px-4" on:click="next">Next &gt;|</button>
             </div>
         </panel>
 
@@ -50,25 +50,25 @@
                 <span id="menu_active_theme" class="font-small text-sdv-brown">Theme: Junimo Forest</span>
             </div>
             <div class="flex flex-row items-center justify-between w-full gap-2">
-                <button id="btn_theme_junimo" class="sdv-btn flex-1" on:click="theme_junimo" tooltip="Junimo Forest: Organic Emerald and Dewdrop">Junimo</button>
-                <button id="btn_theme_pelican" class="sdv-btn flex-1" on:click="theme_pelican" tooltip="Pelican Classic: Vanilla 9-Slice Wooden Borders">Pelican</button>
-                <button id="btn_theme_zinc" class="sdv-btn flex-1" on:click="theme_zinc" tooltip="Shadcn Zinc Dark: Modern High-Contrast Dark Mode">Zinc Dark</button>
-                <button id="btn_theme_arcane" class="sdv-btn flex-1" on:click="theme_arcane" tooltip="Wizard Arcane: Deep Violet and Astral Gold">Arcane</button>
-                <button id="btn_theme_joja" class="sdv-btn flex-1" on:click="theme_joja" tooltip="JojaCorp Blue: Industrial Cyber-Blue">JojaCorp</button>
+                <button id="btn_theme_junimo" class="sdv-btn flex-1" on:click="theme_junimo">Junimo</button>
+                <button id="btn_theme_pelican" class="sdv-btn flex-1" on:click="theme_pelican">Pelican</button>
+                <button id="btn_theme_zinc" class="sdv-btn flex-1" on:click="theme_zinc">Zinc Dark</button>
+                <button id="btn_theme_arcane" class="sdv-btn flex-1" on:click="theme_arcane">Arcane</button>
+                <button id="btn_theme_joja" class="sdv-btn flex-1" on:click="theme_joja">JojaCorp</button>
             </div>
             <div class="flex flex-row items-center justify-between w-full gap-2">
-                <button id="btn_theme_catppuccin" class="sdv-btn flex-1" on:click="theme_catppuccin" tooltip="Catppuccin Mocha: Soothing Pastel Dark Mode">Catppuccin</button>
-                <button id="btn_theme_tokyonight" class="sdv-btn flex-1" on:click="theme_tokyonight" tooltip="Tokyo Night: Clean Neon-Lit Downtown Palette">Tokyo Night</button>
-                <button id="btn_theme_dracula" class="sdv-btn flex-1" on:click="theme_dracula" tooltip="Dracula: Iconic Vampire Dark Palette">Dracula</button>
-                <button id="btn_theme_nord" class="sdv-btn flex-1" on:click="theme_nord" tooltip="Nord Polar: Arctic Frost Bluish-Grey">Nord</button>
-                <button id="btn_theme_cyberpunk" class="sdv-btn flex-1" on:click="theme_cyberpunk" tooltip="Cyberpunk Neon: High-Voltage Night City">Cyberpunk</button>
+                <button id="btn_theme_catppuccin" class="sdv-btn flex-1" on:click="theme_catppuccin">Catppuccin</button>
+                <button id="btn_theme_tokyonight" class="sdv-btn flex-1" on:click="theme_tokyonight">Tokyo Night</button>
+                <button id="btn_theme_dracula" class="sdv-btn flex-1" on:click="theme_dracula">Dracula</button>
+                <button id="btn_theme_nord" class="sdv-btn flex-1" on:click="theme_nord">Nord</button>
+                <button id="btn_theme_cyberpunk" class="sdv-btn flex-1" on:click="theme_cyberpunk">Cyberpunk</button>
             </div>
         </panel>
 
         <!-- Footer -->
         <div class="flex flex-row items-center justify-between w-full px-2">
-            <span class="font-tiny text-sdv-muted">Supports Spotify · YouTube Music · Apple Music · TIDAL · Cider · VLC</span>
-            <button id="btn_menu_close_bottom" class="sdv-btn px-4" on:click="close_menu" tooltip="Close Music Hub">Done</button>
+            <span class="font-tiny text-sdv-muted">Press [F6] or [ESC] to return to game</span>
+            <button id="btn_menu_close_bottom" class="sdv-btn px-4" on:click="close_menu">Done</button>
         </div>
     </div>
 </div>

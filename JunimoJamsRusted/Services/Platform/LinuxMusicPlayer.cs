@@ -13,7 +13,8 @@ namespace JunimoJamsRusted.Services.Platform
         {
             var players = new List<string>
             {
-                // Tier 1 — Streaming
+                // Active User Player & Streaming
+                "bitchord",
                 "spotify",
                 "tidal-hifi",
                 "cider",
@@ -21,7 +22,7 @@ namespace JunimoJamsRusted.Services.Platform
                 "plexamp",
                 "nuclear",
 
-                // Tier 2 — Desktop Players
+                // Desktop Players
                 "clementine",
                 "strawberry",
                 "elisa",
@@ -29,7 +30,13 @@ namespace JunimoJamsRusted.Services.Platform
                 "vlc",
                 "rhythmbox",
                 "audacious",
-                "deadbeef"
+                "deadbeef",
+
+                // Browsers with Media Keys
+                "chromium",
+                "firefox",
+                "brave",
+                "chrome"
             };
 
             if (extraPlayers != null)
@@ -78,7 +85,7 @@ namespace JunimoJamsRusted.Services.Platform
 
             // Parse position in microseconds
             TimeSpan position = TimeSpan.Zero;
-            if (long.TryParse(this.ExtractVariantInt64(posOutput), out long posMicrosec) && posMicrosec > 0)
+            if (long.TryParse(this.ExtractVariantInt64(posOutput), out long posMicrosec) && posMicrosec >= 0)
             {
                 position = TimeSpan.FromMilliseconds(posMicrosec / 1000.0);
             }
@@ -107,22 +114,31 @@ namespace JunimoJamsRusted.Services.Platform
 
         private string? GetActivePlayer()
         {
-            string names = this.RunShellCommand("dbus-send --print-reply --dest=org.freedesktop.DBus /org.freedesktop.DBus org.freedesktop.DBus.ListNames");
+            string names = this.RunShellCommand("dbus-send --print-reply --dest=org.freedesktop.DBus /org/freedesktop.DBus org.freedesktop.DBus.ListNames");
             string[] lines = names.Split('\n');
             
-            // Check priority list first
+            // Check priority list first (extract exact bus name from line)
             foreach (var p in this._priorityPlayers)
             {
-                if (lines.Any(l => l.Contains($"org.mpris.MediaPlayer2.{p}")))
+                var matchingLine = lines.FirstOrDefault(l => l.Contains($"org.mpris.MediaPlayer2.{p}", StringComparison.OrdinalIgnoreCase));
+                if (matchingLine != null)
+                {
+                    int q1 = matchingLine.IndexOf('"');
+                    int q2 = matchingLine.LastIndexOf('"');
+                    if (q1 >= 0 && q2 > q1)
+                    {
+                        return matchingLine.Substring(q1 + 1, q2 - q1 - 1);
+                    }
                     return $"org.mpris.MediaPlayer2.{p}";
+                }
             }
 
             // Fallback to first MPRIS2 player found (e.g. browser instances: org.mpris.MediaPlayer2.chromium.instance...)
-            var fallback = lines.FirstOrDefault(l => l.Contains("org.mpris.MediaPlayer2."));
+            var fallback = lines.FirstOrDefault(l => l.Contains("org.mpris.MediaPlayer2.", StringComparison.OrdinalIgnoreCase));
             if (fallback != null)
             {
-                int quoteStart = fallback.IndexOf("\"") + 1;
-                int quoteEnd = fallback.LastIndexOf("\"");
+                int quoteStart = fallback.IndexOf('"') + 1;
+                int quoteEnd = fallback.LastIndexOf('"');
                 if (quoteStart > 0 && quoteEnd > quoteStart)
                 {
                     return fallback.Substring(quoteStart, quoteEnd - quoteStart);
@@ -190,23 +206,43 @@ namespace JunimoJamsRusted.Services.Platform
         {
             try
             {
-                int keyIndex = output.IndexOf(key);
+                int keyIndex = output.IndexOf($"\"{key}\"");
+                if (keyIndex == -1)
+                    keyIndex = output.IndexOf(key);
                 if (keyIndex == -1)
                     return "";
 
-                string afterKey = output.Substring(keyIndex);
-                int variantIndex = afterKey.IndexOf("variant");
-                if (variantIndex != -1)
+                int variantIndex = output.IndexOf("variant", keyIndex);
+                if (variantIndex == -1)
+                    return "";
+
+                int nextEntry = output.IndexOf("dict entry(", variantIndex);
+                string block = nextEntry != -1
+                    ? output.Substring(variantIndex, nextEntry - variantIndex)
+                    : output.Substring(variantIndex);
+
+                // Collect all string "..." inside the variant block (handles single string and array of strings)
+                var matches = System.Text.RegularExpressions.Regex.Matches(block, "string\\s+\"([^\"]*)\"");
+                if (matches.Count > 0)
                 {
-                    int startQuote = afterKey.IndexOf("\"", variantIndex);
-                    if (startQuote != -1)
+                    var values = new List<string>();
+                    foreach (System.Text.RegularExpressions.Match m in matches)
                     {
-                        int endQuote = afterKey.IndexOf("\"", startQuote + 1);
-                        if (endQuote != -1)
-                        {
-                            return afterKey.Substring(startQuote + 1, endQuote - startQuote - 1);
-                        }
+                        string val = m.Groups[1].Value.Trim();
+                        if (!string.IsNullOrEmpty(val))
+                            values.Add(val);
                     }
+                    if (values.Count > 0)
+                        return string.Join(", ", values);
+                }
+
+                // Fallback to first quoted string
+                int q1 = block.IndexOf('"');
+                if (q1 != -1)
+                {
+                    int q2 = block.IndexOf('"', q1 + 1);
+                    if (q2 != -1)
+                        return block.Substring(q1 + 1, q2 - q1 - 1);
                 }
             }
             catch

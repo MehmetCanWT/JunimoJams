@@ -93,30 +93,29 @@ namespace JunimoJamsRusted.UI
 
             this._view.BuildWithFluent(ui =>
                 ui.Div("w-full h-full flex flex-col justify-start items-start p-4").Children(
-                    ui.Div("flex flex-row items-center w-440 h-auto sdv-box p-3 gap-3").Id("music_card").Children(
-                        ui.Div("w-20 h-20 shrink-0 flex items-center justify-center sdv-panel").Id("album_art_slot").Children(
-                            ui.Icon("sparkles", "lucide-icon lucide-lg")
+                    ui.Div("flex flex-row items-center w-400 h-auto sdv-box gap-3").Id("music_card").Children(
+                        ui.Div("w-18 h-18 shrink-0 flex items-center justify-center sdv-panel overflow-hidden").Id("album_art_slot").Children(
+                            ui.Icon("sparkles", "lucide-icon lucide-md")
                         ),
                         ui.Div("flex flex-col flex-1 gap-1 min-w-0").Children(
                             ui.Div("flex flex-row items-center justify-between w-full").Children(
-                                ui.Badge("Idle", "badge-secondary", "sdv-badge").Id("hud_badge"),
-                                ui.Div("flex flex-row items-center gap-2 shrink-0").Children(
-                                    ui.Text("0:00 / 0:00", "font-tiny text-sdv-muted").Id("hud_time"),
-                                    ui.Div("flex flex-row items-center gap-1 shrink-0").Children(
-                                        ui.Icon("zap", "lucide-icon lucide-sm"),
-                                        ui.Text("Hub [F6]", "font-tiny text-sdv-muted").Id("hud_source")
-                                    )
-                                )
+                                ui.Text("Not Running", "font-dialogue text-sdv-brown shadow truncate flex-1 mr-2").Id("track_title"),
+                                ui.Text("Idle", "font-tiny text-sdv-muted shrink-0").Id("hud_badge")
                             ),
-                            ui.Title("Not Running", "font-dialogue text-sdv-brown shadow").Id("track_title"),
-                            ui.Text("Start Spotify or YouTube Music", "font-small text-sdv-dark").Id("track_artist"),
+                            ui.Div("flex flex-row items-center justify-between w-full").Children(
+                                ui.Text("Music Player", "font-small text-sdv-dark truncate flex-1 mr-2").Id("track_artist"),
+                                ui.Text("0:00 / 0:00", "font-tiny text-sdv-muted shrink-0").Id("hud_time")
+                            ),
                             ui.Div("w-full py-1").Id("progress_row").Children(
-                                ui.ProgressBar("hud_progress_bar", 0f, 100f, "w-full h-3")
+                                ui.ProgressBar("hud_progress_bar", 0f, 100f, "w-full h-2 sdv-bar")
                             ),
                             ui.Div("flex flex-row items-center justify-between w-full pt-1").Id("controls_row").Children(
-                                ui.ArrowLeft("btn_prev", "prev"),
-                                ui.Button("btn_playpause", "Play", "playpause", "px-4"),
-                                ui.ArrowRight("btn_next", "next")
+                                ui.Div("flex flex-row items-center gap-2").Children(
+                                    ui.ArrowLeft("btn_prev", "prev"),
+                                    ui.Button("btn_playpause", "Play", "playpause", "px-3"),
+                                    ui.ArrowRight("btn_next", "next")
+                                ),
+                                ui.Button("btn_open_hub", "Hub [F6]", "open_menu", "px-2")
                             )
                         )
                     )
@@ -170,18 +169,16 @@ namespace JunimoJamsRusted.UI
 
             this._view.SetText("track_title", displayTitle);
             this._view.SetText("track_artist", displayArtist);
-            this._view.SetTooltip("track_title", $"{normArtist} - {normTitle}");
 
             string status = track.IsPlaying ? "Playing" : (track.Name == "Not Running" ? "Idle" : "Paused");
             this._view.SetText("hud_badge", status);
 
             string btnLabel = track.IsPlaying ? "Pause" : "Play";
             this._view.SetText("btn_playpause", btnLabel);
-            this._view.SetTooltip("btn_playpause", track.IsPlaying ? "Pause Playback" : "Resume Playback");
 
             this._view.SetVisible("controls_row", this._config.ShowPlaybackButtons);
             this._view.SetVisible("album_art_slot", this._config.ShowAlbumArt);
-            this._view.SetVisible("progress_row", this._config.ShowProgressBar && track.Duration > TimeSpan.Zero);
+            this._view.SetVisible("progress_row", this._config.ShowProgressBar);
 
             this.UpdateTimelineDisplay(track);
         }
@@ -248,11 +245,11 @@ namespace JunimoJamsRusted.UI
             // Overlay High-Resolution Rounded Album Art if available
             if (this._config.ShowAlbumArt && track.CoverArt != null && !track.CoverArt.IsDisposed)
             {
-                int artX = this._config.HudPositionX + 24;
-                int artY = this._config.HudPositionY + 24;
-                Rectangle destRect = new Rectangle(artX, artY, 80, 80);
+                int artX = this._config.HudPositionX + 24 + 4;
+                int artY = this._config.HudPositionY + 24 + 4;
+                Rectangle destRect = new Rectangle(artX, artY, 64, 64);
 
-                this.DrawRoundedArt(spriteBatch, track.CoverArt, destRect, radius: 10);
+                this.DrawRoundedArt(spriteBatch, track.CoverArt, destRect, radius: 6);
             }
         }
 
