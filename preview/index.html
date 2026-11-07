@@ -382,11 +382,12 @@
             color: #8B4513;
         }
 
-        /* Row 2: Artist & Animated Equalizer */
+        /* Row 2: Artist & Animated Equalizer (Left) + Time (Right) */
         .row-artist {
             display: flex;
             flex-direction: row;
             align-items: center;
+            justify-content: space-between;
             gap: 6px;
             width: 100%;
             min-width: 0;
@@ -582,20 +583,22 @@
 
                 <!-- 2. Structured Right Column (Zero Overflow) -->
                 <div class="content-col">
-                    <!-- Row 1: Title & Time -->
+                    <!-- Row 1: Full-Width Title -->
                     <div class="row-title">
                         <span id="hud-title" class="track-title">Танцуй (Slowed)</span>
-                        <span id="hud-time" class="track-time">1:15 / 2:38</span>
                     </div>
 
-                    <!-- Row 2: Animated Equalizer & Artist -->
+                    <!-- Row 2: Animated Equalizer & Artist (Left), Time (Right) -->
                     <div class="row-artist">
-                        <div class="equalizer-bars" id="eq-container">
-                            <div class="eq-bar" id="eq1" style="height: 6px;"></div>
-                            <div class="eq-bar" id="eq2" style="height: 9px;"></div>
-                            <div class="eq-bar" id="eq3" style="height: 4px;"></div>
+                        <div class="artist-group" style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; overflow: hidden;">
+                            <div class="equalizer-bars" id="eq-container">
+                                <div class="eq-bar" id="eq1" style="height: 6px;"></div>
+                                <div class="eq-bar" id="eq2" style="height: 9px;"></div>
+                                <div class="eq-bar" id="eq3" style="height: 4px;"></div>
+                            </div>
+                            <span id="hud-artist" class="track-artist">ARGOMANIA</span>
                         </div>
-                        <span id="hud-artist" class="track-artist">ARGOMANIA</span>
+                        <span id="hud-time" class="track-time">1:15 / 2:38</span>
                     </div>
 
                     <!-- Row 3: Slim Progress Bar -->

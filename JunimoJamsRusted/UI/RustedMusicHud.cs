@@ -31,9 +31,11 @@ namespace JunimoJamsRusted.UI
         private readonly Action _openMenuAction;
         private readonly Action _onStateChangedAction;
 
-        private readonly MarqueeController _titleMarquee = new() { MaxVisibleChars = 20 };
-        private readonly MarqueeController _artistMarquee = new() { MaxVisibleChars = 26 };
+        private readonly SmoothPixelMarquee _titleMarquee = new();
+        private readonly SmoothPixelMarquee _artistMarquee = new();
         private readonly EqualizerEngine _equalizer = new();
+
+        private static readonly RasterizerState ScissorRasterizer = new() { ScissorTestEnable = true, CullMode = CullMode.None };
 
         private Texture2D? _cardBgTexture;
         private Texture2D? _cardBorderTexture;
@@ -88,8 +90,34 @@ namespace JunimoJamsRusted.UI
 
             if (this._config.EnableMarqueeText)
             {
-                this._titleMarquee.Update();
-                this._artistMarquee.Update();
+                float s = Math.Clamp(this._config.HudScale, 0.5f, 2.5f);
+                if (s <= 0.01f) s = 1.0f;
+
+                float titleScale = 0.62f * s;
+                float artistScale = 0.52f * s;
+
+                // Title measurements
+                string title = string.IsNullOrWhiteSpace(this._lastTrack.Name) ? "Not Running" : this._lastTrack.Name;
+                float titlePixelWidth = Game1.smallFont.MeasureString(title).X * titleScale;
+                float maxTitleWidth = 228f * s;
+                this._titleMarquee.Update(titlePixelWidth, maxTitleWidth);
+
+                // Time width in Row 2
+                string timeStr = "0:00 / 0:00";
+                if (this._lastTrack.Duration > TimeSpan.Zero)
+                {
+                    TimeSpan currentPos = this._lastTrack.GetExtrapolatedPosition();
+                    timeStr = $"{FormatTime(currentPos)} / {FormatTime(this._lastTrack.Duration)}";
+                }
+                float timeScale = 0.52f * s;
+                float timeWidth = Game1.smallFont.MeasureString(timeStr).X * timeScale;
+
+                // Artist measurements
+                string artist = string.IsNullOrWhiteSpace(this._lastTrack.Artist) ? "Music Player" : this._lastTrack.Artist;
+                float artistPixelWidth = Game1.smallFont.MeasureString(artist).X * artistScale;
+                float eqWidth = this._lastTrack.IsPlaying ? (13f * s) : 0f;
+                float maxArtistWidth = Math.Max(30f * s, (228f * s) - timeWidth - (8f * s) - eqWidth);
+                this._artistMarquee.Update(artistPixelWidth, maxArtistWidth);
             }
         }
 
@@ -222,10 +250,23 @@ namespace JunimoJamsRusted.UI
             int colX = (int)(cardX + 82 * s);
             int colW = (int)(228 * s);
 
-            // Row 1: Title & Time
-            string displayTitle = this._config.EnableMarqueeText ? this._titleMarquee.GetVisibleText() : StringUtils.NormalizeForHud(track.Name);
+            // Row 1: Full-Width Title (Y = cardY + 8 * s)
+            string displayTitle = StringUtils.NormalizeForHud(track.Name);
             if (string.IsNullOrWhiteSpace(displayTitle)) displayTitle = "Not Running";
 
+            float titleScale = 0.62f * s;
+            float titlePixelWidth = Game1.smallFont.MeasureString(displayTitle).X * titleScale;
+            float titleOffset = (this._config.EnableMarqueeText && titlePixelWidth > colW) ? this._titleMarquee.PixelOffset : 0f;
+
+            Rectangle titleClipRect = new Rectangle(colX, cardY + (int)(5 * s), colW, (int)(20 * s));
+            DrawClipped(spriteBatch, titleClipRect, () =>
+            {
+                Vector2 titlePos = new Vector2(colX - titleOffset, cardY + (8 * s));
+                spriteBatch.DrawString(Game1.smallFont, displayTitle, titlePos + new Vector2(1, 1), Color.Black * 0.85f, 0f, Vector2.Zero, titleScale, SpriteEffects.None, 1f);
+                spriteBatch.DrawString(Game1.smallFont, displayTitle, titlePos, colors.Title, 0f, Vector2.Zero, titleScale, SpriteEffects.None, 1f);
+            });
+
+            // Row 2: Equalizer + Artist (Left), Time (Right) (Y = cardY + 28 * s)
             string timeStr = "0:00 / 0:00";
             if (track.Duration > TimeSpan.Zero)
             {
@@ -235,17 +276,9 @@ namespace JunimoJamsRusted.UI
 
             float timeScale = 0.52f * s;
             float timeWidth = Game1.smallFont.MeasureString(timeStr).X * timeScale;
-            Vector2 timePos = new Vector2(colX + colW - timeWidth, cardY + (9 * s));
-            spriteBatch.DrawString(Game1.smallFont, timeStr, timePos + new Vector2(1, 1), Color.Black * 0.7f, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
-            spriteBatch.DrawString(Game1.smallFont, timeStr, timePos, colors.Time, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
+            Vector2 timePos = new Vector2(colX + colW - timeWidth, cardY + (28 * s));
 
-            // Title with shadow
-            float titleScale = 0.62f * s;
-            Vector2 titlePos = new Vector2(colX, cardY + (8 * s));
-            spriteBatch.DrawString(Game1.smallFont, displayTitle, titlePos + new Vector2(1, 1), Color.Black * 0.85f, 0f, Vector2.Zero, titleScale, SpriteEffects.None, 1f);
-            spriteBatch.DrawString(Game1.smallFont, displayTitle, titlePos, colors.Title, 0f, Vector2.Zero, titleScale, SpriteEffects.None, 1f);
-
-            // Row 2: Equalizer & Artist
+            // Equalizer (Left side)
             int artistX = colX;
             if (track.IsPlaying)
             {
@@ -263,13 +296,26 @@ namespace JunimoJamsRusted.UI
                 artistX += (int)(13 * s);
             }
 
-            string displayArtist = this._config.EnableMarqueeText ? this._artistMarquee.GetVisibleText() : StringUtils.NormalizeForHud(track.Artist);
+            // Artist Name (Bounded between Equalizer and Time, with 8px safety gap before Time)
+            string displayArtist = StringUtils.NormalizeForHud(track.Artist);
             if (string.IsNullOrWhiteSpace(displayArtist)) displayArtist = "Music Player";
 
             float artistScale = 0.52f * s;
-            Vector2 artistPos = new Vector2(artistX, cardY + (28 * s));
-            spriteBatch.DrawString(Game1.smallFont, displayArtist, artistPos + new Vector2(1, 1), Color.Black * 0.7f, 0f, Vector2.Zero, artistScale, SpriteEffects.None, 1f);
-            spriteBatch.DrawString(Game1.smallFont, displayArtist, artistPos, colors.Artist, 0f, Vector2.Zero, artistScale, SpriteEffects.None, 1f);
+            float artistPixelWidth = Game1.smallFont.MeasureString(displayArtist).X * artistScale;
+            int maxArtistWidth = Math.Max(30, (int)(timePos.X - artistX - (8 * s)));
+            float artistOffset = (this._config.EnableMarqueeText && artistPixelWidth > maxArtistWidth) ? this._artistMarquee.PixelOffset : 0f;
+
+            Rectangle artistClipRect = new Rectangle(artistX, cardY + (int)(25 * s), maxArtistWidth, (int)(18 * s));
+            DrawClipped(spriteBatch, artistClipRect, () =>
+            {
+                Vector2 artistPos = new Vector2(artistX - artistOffset, cardY + (28 * s));
+                spriteBatch.DrawString(Game1.smallFont, displayArtist, artistPos + new Vector2(1, 1), Color.Black * 0.7f, 0f, Vector2.Zero, artistScale, SpriteEffects.None, 1f);
+                spriteBatch.DrawString(Game1.smallFont, displayArtist, artistPos, colors.Artist, 0f, Vector2.Zero, artistScale, SpriteEffects.None, 1f);
+            });
+
+            // Draw Time (Right side, always visible without overlap)
+            spriteBatch.DrawString(Game1.smallFont, timeStr, timePos + new Vector2(1, 1), Color.Black * 0.7f, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
+            spriteBatch.DrawString(Game1.smallFont, timeStr, timePos, colors.Time, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
 
             // Row 3: Slim Progress Bar
             int barY = (int)(cardY + 47 * s);
@@ -334,6 +380,37 @@ namespace JunimoJamsRusted.UI
             sb.Draw(Game1.staminaRect, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), color);
             sb.Draw(Game1.staminaRect, new Rectangle(r.X, r.Y, 1, r.Height), color);
             sb.Draw(Game1.staminaRect, new Rectangle(r.Right - 1, r.Y, 1, r.Height), color);
+        }
+
+        private static void DrawClipped(SpriteBatch sb, Rectangle clipRect, Action drawAction)
+        {
+            GraphicsDevice device = sb.GraphicsDevice;
+            Rectangle prevScissor = device.ScissorRectangle;
+            RasterizerState prevRaster = device.RasterizerState;
+
+            sb.End();
+
+            float uiScale = (Game1.options.uiScale > 0) ? Game1.options.uiScale : 1f;
+            int sx = (int)(clipRect.X * uiScale);
+            int sy = (int)(clipRect.Y * uiScale);
+            int sw = (int)Math.Ceiling(clipRect.Width * uiScale);
+            int sh = (int)Math.Ceiling(clipRect.Height * uiScale);
+
+            Rectangle hwRect = new Rectangle(sx, sy, Math.Max(1, sw), Math.Max(1, sh));
+            hwRect = Rectangle.Intersect(device.Viewport.Bounds, hwRect);
+
+            if (hwRect.Width > 0 && hwRect.Height > 0)
+            {
+                device.ScissorRectangle = hwRect;
+            }
+
+            sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, DepthStencilState.None, ScissorRasterizer);
+
+            drawAction();
+
+            sb.End();
+            device.ScissorRectangle = prevScissor;
+            sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, DepthStencilState.None, prevRaster ?? RasterizerState.CullNone);
         }
 
         public static HudThemeColors GetThemeColors(string themeName)
