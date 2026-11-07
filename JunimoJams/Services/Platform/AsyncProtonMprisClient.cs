@@ -446,8 +446,14 @@ namespace JunimoJams.Services.Platform
                 if (posReply != null)
                 {
                     long posMicro = ExtractVariantInt64(posReply);
-                    if (posMicro >= 0)
+                    if (posMicro > 0)
                         position = TimeSpan.FromMilliseconds(posMicro / 1000.0);
+                }
+
+                // If query returned 0 or failed, but track is the same and playing, keep extrapolating forward
+                if (position <= TimeSpan.Zero && this._latestTrack.Name == title && this._latestTrack.Artist == artist && this._latestTrack.IsPlaying && this._latestTrack.Duration > TimeSpan.Zero)
+                {
+                    position = this._latestTrack.GetExtrapolatedPosition();
                 }
 
                 // Log change if title actually changed (only when meaningful)
@@ -559,7 +565,11 @@ namespace JunimoJams.Services.Platform
             byte msgType = msg[1];
             if (msgType == 4) // SIGNAL (PropertiesChanged or NameOwnerChanged)
             {
-                this.RefreshPlayerState();
+                if ((DateTime.UtcNow - this._lastPollTime).TotalMilliseconds >= 500)
+                {
+                    this._lastPollTime = DateTime.UtcNow;
+                    this.RefreshPlayerState();
+                }
             }
 
             return true;
@@ -569,7 +579,7 @@ namespace JunimoJams.Services.Platform
         {
             if (this._socket == null) return null;
 
-            // Wait for METHOD_RETURN (type 2) or ERROR (type 3). If signals arrive while waiting, process them.
+            // Wait for METHOD_RETURN (type 2) or ERROR (type 3). If signals arrive while waiting, ignore and keep waiting.
             for (int attempt = 0; attempt < 5; attempt++)
             {
                 byte[]? msg = this.ReceiveSingleMessage();
@@ -587,8 +597,8 @@ namespace JunimoJams.Services.Platform
                 }
                 else if (msgType == 4) // SIGNAL
                 {
-                    // Signal arrived while waiting for reply; handle it and keep waiting
-                    this.RefreshPlayerState();
+                    // Signal arrived while waiting for reply; ignore and keep waiting
+                    continue;
                 }
             }
 

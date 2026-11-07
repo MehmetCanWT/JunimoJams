@@ -51,6 +51,9 @@ namespace JunimoJams.UI
         private Texture2D? _roundedArtCache;
         private string _roundedArtCacheKey = string.Empty;
 
+        private SpriteFont? _ruDialogueFont;
+        private SpriteFont? _ruSmallFont;
+
         private bool _wasMouseDown;
         private TrackInfo _lastTrack = new();
 
@@ -90,6 +93,41 @@ namespace JunimoJams.UI
             this._artistMarquee.Text = normArtist;
         }
 
+        private void EnsureFontsLoaded()
+        {
+            if (this._ruDialogueFont != null && this._ruSmallFont != null)
+                return;
+
+            try
+            {
+                this._ruDialogueFont ??= Game1.content.Load<SpriteFont>("Fonts/SpriteFont1.ru-RU");
+            }
+            catch
+            {
+                this._ruDialogueFont = Game1.dialogueFont;
+            }
+
+            try
+            {
+                this._ruSmallFont ??= Game1.content.Load<SpriteFont>("Fonts/SmallFont.ru-RU");
+            }
+            catch
+            {
+                this._ruSmallFont = Game1.smallFont;
+            }
+        }
+
+        private (SpriteFont font, float titleScale, float artistScale, float timeScale) GetFontAndScales(float s)
+        {
+            this.EnsureFontsLoaded();
+            bool isClassic = this._config.Theme == "PelicanClassic";
+            SpriteFont font = isClassic ? (this._ruSmallFont ?? Game1.smallFont) : (this._ruDialogueFont ?? Game1.dialogueFont);
+            float titleScale = (isClassic ? 0.62f : 0.38f) * s;
+            float artistScale = (isClassic ? 0.52f : 0.30f) * s;
+            float timeScale = (isClassic ? 0.52f : 0.30f) * s;
+            return (font, titleScale, artistScale, timeScale);
+        }
+
         public void UpdatePerTickAnimations()
         {
             if (this._lastTrack.Name == "Not Running")
@@ -100,12 +138,11 @@ namespace JunimoJams.UI
                 float s = Math.Clamp(this._config.HudScale, 0.5f, 2.5f);
                 if (s <= 0.01f) s = 1.0f;
 
-                float titleScale = 0.62f * s;
-                float artistScale = 0.52f * s;
+                var (font, titleScale, artistScale, timeScale) = this.GetFontAndScales(s);
 
                 // Title measurements
                 string title = string.IsNullOrWhiteSpace(this._lastTrack.Name) ? "Not Running" : this._lastTrack.Name;
-                float titlePixelWidth = Game1.smallFont.MeasureString(title).X * titleScale;
+                float titlePixelWidth = font.MeasureString(title).X * titleScale;
                 float maxTitleWidth = 228f * s;
                 this._titleMarquee.Update(titlePixelWidth, maxTitleWidth);
 
@@ -116,12 +153,11 @@ namespace JunimoJams.UI
                     TimeSpan currentPos = this._lastTrack.GetExtrapolatedPosition();
                     timeStr = $"{FormatTime(currentPos)} / {FormatTime(this._lastTrack.Duration)}";
                 }
-                float timeScale = 0.52f * s;
-                float timeWidth = Game1.smallFont.MeasureString(timeStr).X * timeScale;
+                float timeWidth = font.MeasureString(timeStr).X * timeScale;
 
                 // Artist measurements
                 string artist = string.IsNullOrWhiteSpace(this._lastTrack.Artist) ? "Music Player" : this._lastTrack.Artist;
-                float artistPixelWidth = Game1.smallFont.MeasureString(artist).X * artistScale;
+                float artistPixelWidth = font.MeasureString(artist).X * artistScale;
                 float eqWidth = this._lastTrack.IsPlaying ? (13f * s) : 0f;
                 float maxArtistWidth = Math.Max(30f * s, (228f * s) - timeWidth - (8f * s) - eqWidth);
                 this._artistMarquee.Update(artistPixelWidth, maxArtistWidth);
@@ -222,16 +258,17 @@ namespace JunimoJams.UI
             int colX = (int)(cardX + 82 * s);
             int colW = (int)(228 * s);
 
+            var (font, titleScale, artistScale, timeScale) = this.GetFontAndScales(s);
+
             // Row 1: Full-Width Title (Y = cardY + 8 * s)
             string displayTitle = StringUtils.NormalizeForHud(track.Name);
             if (string.IsNullOrWhiteSpace(displayTitle)) displayTitle = "Not Running";
 
-            float titleScale = 0.62f * s;
-            float titlePixelWidth = Game1.smallFont.MeasureString(displayTitle).X * titleScale;
+            float titlePixelWidth = font.MeasureString(displayTitle).X * titleScale;
             float titleOffset = (this._config.EnableMarqueeText && titlePixelWidth > colW) ? this._titleMarquee.PixelOffset : 0f;
 
             Vector2 titlePos = new Vector2(colX - titleOffset, cardY + (8 * s));
-            DrawBoundedString(spriteBatch, Game1.smallFont, displayTitle, titlePos, titleScale, colors.Title, Color.Black * 0.85f, colX, colX + colW);
+            DrawBoundedString(spriteBatch, font, displayTitle, titlePos, titleScale, colors.Title, Color.Black * 0.85f, colX, colX + colW);
 
             // Row 2: Equalizer + Artist (Left), Time (Right) (Y = cardY + 28 * s)
             string timeStr = "0:00 / 0:00";
@@ -241,21 +278,19 @@ namespace JunimoJams.UI
                 timeStr = $"{FormatTime(currentPos)} / {FormatTime(track.Duration)}";
             }
 
-            float timeScale = 0.52f * s;
-            float timeWidth = Game1.smallFont.MeasureString(timeStr).X * timeScale;
+            float timeWidth = font.MeasureString(timeStr).X * timeScale;
             Vector2 timePos = new Vector2(colX + colW - timeWidth, cardY + (28 * s));
 
             int artistX = colX + (track.IsPlaying ? (int)(13 * s) : 0);
             string displayArtist = StringUtils.NormalizeForHud(track.Artist);
             if (string.IsNullOrWhiteSpace(displayArtist)) displayArtist = "Music Player";
 
-            float artistScale = 0.52f * s;
-            float artistPixelWidth = Game1.smallFont.MeasureString(displayArtist).X * artistScale;
+            float artistPixelWidth = font.MeasureString(displayArtist).X * artistScale;
             int maxArtistWidth = Math.Max(30, (int)(timePos.X - artistX - (8 * s)));
             float artistOffset = (this._config.EnableMarqueeText && artistPixelWidth > maxArtistWidth) ? this._artistMarquee.PixelOffset : 0f;
 
             Vector2 artistPos = new Vector2(artistX - artistOffset, cardY + (28 * s));
-            DrawBoundedString(spriteBatch, Game1.smallFont, displayArtist, artistPos, artistScale, colors.Artist, Color.Black * 0.7f, artistX, timePos.X - (8 * s));
+            DrawBoundedString(spriteBatch, font, displayArtist, artistPos, artistScale, colors.Artist, Color.Black * 0.7f, artistX, timePos.X - (8 * s));
 
             // Clean Painter's Masks (ensure text never crosses into padding or other elements)
             // Left margin mask (covers cardX to colX)
@@ -273,8 +308,8 @@ namespace JunimoJams.UI
             spriteBatch.Draw(Game1.staminaRect, timeShield, colors.Background);
 
             // Draw Time text (Right side, always crisp & visible)
-            spriteBatch.DrawString(Game1.smallFont, timeStr, timePos + new Vector2(1, 1), Color.Black * 0.7f, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
-            spriteBatch.DrawString(Game1.smallFont, timeStr, timePos, colors.Time, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
+            spriteBatch.DrawString(font, timeStr, timePos + new Vector2(1, 1), Color.Black * 0.7f, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
+            spriteBatch.DrawString(font, timeStr, timePos, colors.Time, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
 
             // Equalizer (Left side of Row 2)
             if (track.IsPlaying)
@@ -407,6 +442,12 @@ namespace JunimoJams.UI
             {
                 char c = text[i];
                 string ch = (c < 128) ? AsciiStrings[c] : c.ToString();
+
+                if (!font.Characters.Contains(c) && font.DefaultCharacter == null)
+                {
+                    ch = " ";
+                }
+
                 float w = font.MeasureString(ch).X * scale;
 
                 // Character visible if its horizontal span overlaps [minX, maxX]
