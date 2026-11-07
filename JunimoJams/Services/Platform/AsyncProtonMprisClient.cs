@@ -176,7 +176,7 @@ namespace JunimoJams.Services.Platform
                     };
 
                     socket.Connect(endpoint);
-                    this.Log($"Connected to socket: '{path}'. Starting SASL authentication...", LogLevel.Info);
+                    this.Log($"Connected to socket: '{path}'. Starting SASL authentication...", LogLevel.Trace);
 
                     // SASL EXTERNAL Handshake:
                     // 1. Send \0AUTH EXTERNAL 31303030\r\n (hex 1000)
@@ -215,7 +215,7 @@ namespace JunimoJams.Services.Platform
                     if (helloReply != null)
                     {
                         string assignedName = ExtractStringFromBody(helloReply);
-                        this.Log($"D-Bus Hello succeeded! Assigned bus name: {assignedName}", LogLevel.Info);
+                        this.Log($"D-Bus Hello succeeded! Assigned bus name: {assignedName}", LogLevel.Trace);
                     }
                     else
                     {
@@ -435,7 +435,7 @@ namespace JunimoJams.Services.Platform
                             duration = TimeSpan.FromMilliseconds(lInt / 1000.0);
                     }
 
-                    this.Log($"Metadata parsed: title='{title}', artist='{artist}', length={duration.TotalSeconds}s, artUrl='{artUrl}'", LogLevel.Info);
+                    this.Log($"Metadata parsed: title='{title}', artist='{artist}', length={duration.TotalSeconds}s, artUrl='{artUrl}'", LogLevel.Trace);
                 }
 
                 // Query Position
@@ -450,10 +450,14 @@ namespace JunimoJams.Services.Platform
                         position = TimeSpan.FromMilliseconds(posMicro / 1000.0);
                 }
 
-                // Log change if title or playback state changed
-                if (this._latestTrack.Name != title || this._latestTrack.IsPlaying != isPlaying)
+                // Log change if title actually changed (only when meaningful)
+                if (this._latestTrack.Name != title && !string.IsNullOrWhiteSpace(title) && title != "Not Running" && title != "Unknown")
                 {
-                    this.Log($"Active Track: '{title}' by '{artist}' [{(isPlaying ? "Playing" : "Paused")}]", LogLevel.Info);
+                    this.Log($"Now Playing: '{title}' by '{artist}'", LogLevel.Info);
+                }
+                else if (this._latestTrack.IsPlaying != isPlaying)
+                {
+                    this.Log($"Playback state changed: {(isPlaying ? "Playing" : "Paused")}", LogLevel.Trace);
                 }
 
                 // Atomically update snapshot for GameLoop.UpdateTicked
@@ -501,7 +505,7 @@ namespace JunimoJams.Services.Platform
 
                 if (activeNames.Count > 0)
                 {
-                    this.Log($"Found {activeNames.Count} MPRIS players: {string.Join(", ", activeNames)}", LogLevel.Info);
+                    this.Log($"Found {activeNames.Count} MPRIS players: {string.Join(", ", activeNames)}", LogLevel.Trace);
                 }
 
                 // Match against priority list (bitchord, spotify, etc.)
@@ -513,7 +517,7 @@ namespace JunimoJams.Services.Platform
                         if (name.StartsWith(target, StringComparison.OrdinalIgnoreCase))
                         {
                             this._activePlayer = name;
-                            this.Log($"Selected active player by priority: {name}", LogLevel.Info);
+                            this.Log($"Selected active player by priority: {name}", LogLevel.Trace);
                             return;
                         }
                     }
@@ -522,7 +526,7 @@ namespace JunimoJams.Services.Platform
                 this._activePlayer = activeNames.Count > 0 ? activeNames[0] : null;
                 if (this._activePlayer != null)
                 {
-                    this.Log($"Selected default active player: {this._activePlayer}", LogLevel.Info);
+                    this.Log($"Selected default active player: {this._activePlayer}", LogLevel.Trace);
                 }
             }
             catch (Exception ex)

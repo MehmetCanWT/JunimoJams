@@ -7,8 +7,7 @@
 [![Stardew Valley](https://img.shields.io/badge/Stardew_Valley-1.6+-green?logo=stardewvalley)](#)
 [![SMAPI](https://img.shields.io/badge/SMAPI-4.1+-brightgreen)](#)
 [![RustedUI](https://img.shields.io/badge/Powered_by-RustedUI_Zero--GC-orange?logo=rust)](#)
-[![Tailwind CSS](https://img.shields.io/badge/Layout-Taffy_Flexbox_%2B_Tailwind-38bdf8?logo=tailwindcss)](#)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary_%2F_All_Rights_Reserved-red.svg)](LICENSE.md)
 
 ---
 
@@ -63,7 +62,15 @@ It acts as a **Universal Media Hub** that tracks, controls, and displays details
 
 ---
 
-## 🛠️ Building & Deploying
+## 📦 Downloads & Official Distribution
+
+> [!IMPORTANT]
+> **Pre-compiled binary releases are distributed EXCLUSIVELY via the official mod page (Nexus Mods).**
+> Binary builds, `.dll`, and release `.zip` archives are intentionally not hosted on GitHub. Do not download or mirror binaries from unauthorized third-party platforms.
+
+---
+
+## 🛠️ Building From Source
 
 ### Prerequisites
 - **Stardew Valley 1.6+** with **SMAPI 4.1+**
@@ -71,7 +78,7 @@ It acts as a **Universal Media Hub** that tracks, controls, and displays details
 - **.NET 6.0 SDK**
 
 ### Build Command
-Run the build script to compile and deploy directly to your `Mods/JunimoJams` folder:
+Run the build script to compile and deploy directly to your local `Mods/JunimoJams` folder:
 
 ```bash
 ./build.sh
@@ -84,11 +91,12 @@ Run the build script to compile and deploy directly to your `Mods/JunimoJams` fo
 ```text
 JunimoJams/
 ├── build.sh                                     # One-command dotnet build and deploy script
-├── JunimoJams.sln                         # Visual Studio solution
+├── JunimoJams.sln                               # Visual Studio solution
+├── LICENSE.md                                   # Proprietary Commercial License terms
 ├── README.md                                    # Comprehensive documentation
 └── JunimoJams/
-    ├── JunimoJams.csproj                  # C# project with Rusted.Smapi reference
-    ├── manifest.json                            # SMAPI manifest with Mehmetcan.RustedUI dependency
+    ├── JunimoJams.csproj                        # C# project with Rusted.Smapi reference
+    ├── manifest.json                            # SMAPI manifest
     ├── ModConfig.cs                             # Configuration schema
     ├── ModEntry.cs                              # SMAPI lifecycle, polling & event dispatching
     ├── IGenericModConfigMenuApi.cs              # Optional GMCM integration
@@ -103,17 +111,22 @@ JunimoJams/
     │   ├── MusicService.cs
     │   ├── ArtService.cs
     │   └── Platform/
-    │       ├── LinuxMusicPlayer.cs              # D-Bus MPRIS2 tracker
+    │       ├── AsyncProtonMprisClient.cs        # Zero-allocation D-Bus IPC client for Proton/Linux
+    │       ├── LinuxMusicPlayer.cs              # Native Linux player fallback
     │       ├── WindowsMusicPlayer.cs            # Win32 EnumWindows & media keys
-    │       ├── MacMusicPlayer.cs                # AppleScript & Quartz media keys
-    │       └── YouTubeMusicParser.cs            # Universal browser title parser
-    └── UI/                                      # RustedUI integration layer
-        ├── RustedMusicHud.cs                    # RustedView HUD overlay manager
-        └── RustedMusicMenu.cs                   # RustedMenu in-game Music Hub
+    │       └── MacMusicPlayer.cs                # AppleScript & Quartz media keys
+    └── UI/                                      # Zero-stall rendering layer
+        ├── RustedMusicHud.cs                    # High-performance 60 FPS HUD overlay
+        ├── RustedMusicMenu.cs                   # In-game Music Hub menu
+        └── SmoothPixelMarquee.cs                # Sub-pixel smooth linear scrolling
 ```
 
 ---
 
-## 📜 License
+## 📜 License & Intellectual Property
 
-MIT License — Copyright (c) 2026 MehmetCanWT
+**Proprietary Commercial License — Copyright (c) 2026 Mehmet Can (MehmetCanWT). All Rights Reserved.**
+
+Redistribution, republishing, re-uploading, mirroring, selling, leasing, bundling, or sharing of this software (in source, binary, or repackaged form) on any platform, mod collection, modpack, file host, or Discord server without express prior written consent and a commercial license agreement is strictly prohibited. Unauthorized redistribution is subject to mandatory licensing royalty fees and legal infringement remedies.
+
+See [LICENSE.md](LICENSE.md) for full terms and conditions.

@@ -60,7 +60,7 @@ namespace JunimoJams
             helper.Events.GameLoop.GameLaunched += this.OnGameLaunched;
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             helper.Events.GameLoop.ReturnedToTitle += this.OnReturnedToTitle;
-            helper.Events.Display.RenderingHud += this.OnRenderingHud;
+            helper.Events.Display.RenderedHud += this.OnRenderedHud;
             helper.Events.Display.RenderedActiveMenu += this.OnRenderedActiveMenu;
             helper.Events.Input.ButtonPressed += this.OnButtonPressed;
         }
@@ -282,7 +282,7 @@ namespace JunimoJams
             }
         }
 
-        private void OnRenderingHud(object? sender, RenderingHudEventArgs e)
+        private void OnRenderedHud(object? sender, RenderedHudEventArgs e)
         {
             this.ProcessPendingArt();
 

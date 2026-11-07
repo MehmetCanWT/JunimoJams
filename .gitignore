@@ -3,6 +3,17 @@ obj/
 *.user
 *.suo
 .vs/
+.vscode/
 .idea/
 *.zip
+*.tar.gz
+*.rar
+*.7z
+*.dll
+*.pdb
+*.nupkg
 cache/
+artifacts/
+publish/
+dist/
+release/
