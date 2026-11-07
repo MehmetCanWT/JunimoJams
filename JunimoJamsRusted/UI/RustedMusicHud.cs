@@ -22,9 +22,12 @@ namespace JunimoJamsRusted.UI
         private readonly LruTextureCache _textureCache = new(capacity: 30);
         private readonly MarqueeController _titleMarquee = new() { MaxVisibleChars = 22 };
         private readonly MarqueeController _artistMarquee = new() { MaxVisibleChars = 28 };
+        private readonly EqualizerEngine _equalizer = new();
 
         private Texture2D? _roundedArtCache;
         private string _roundedArtCacheKey = string.Empty;
+        private Texture2D? _mediaIconsTexture;
+        private bool _wasMouseDown;
         private TrackInfo _lastTrack = new();
 
         public RustedMusicHud(
@@ -93,29 +96,25 @@ namespace JunimoJamsRusted.UI
 
             this._view.BuildWithFluent(ui =>
                 ui.Div("w-full h-full flex flex-col justify-start items-start p-4").Children(
-                    ui.Div("flex flex-row items-center w-400 h-auto sdv-box gap-3").Id("music_card").Children(
-                        ui.Div("w-18 h-18 shrink-0 flex items-center justify-center sdv-panel overflow-hidden").Id("album_art_slot").Children(
+                    ui.Div("flex flex-row items-center w-320 h-80 sdv-box p-2 gap-2 overflow-hidden").Id("music_card").Children(
+                        ui.Div("w-16 h-16 shrink-0 flex items-center justify-center sdv-panel overflow-hidden").Id("album_art_slot").Children(
                             ui.Icon("sparkles", "lucide-icon lucide-md")
                         ),
-                        ui.Div("flex flex-col flex-1 gap-1 min-w-0").Children(
-                            ui.Div("flex flex-row items-center justify-between w-full").Children(
-                                ui.Text("Not Running", "font-dialogue text-sdv-brown shadow truncate flex-1 mr-2").Id("track_title"),
-                                ui.Text("Idle", "font-tiny text-sdv-muted shrink-0").Id("hud_badge")
+                        ui.Div("flex flex-col flex-1 h-full justify-between min-w-0").Children(
+                            ui.Div("flex flex-row items-center w-full min-w-0").Children(
+                                ui.Text("Not Running", "font-small text-sdv-brown shadow truncate w-full").Id("track_title")
                             ),
-                            ui.Div("flex flex-row items-center justify-between w-full").Children(
-                                ui.Text("Music Player", "font-small text-sdv-dark truncate flex-1 mr-2").Id("track_artist"),
+                            ui.Div("flex flex-row items-center justify-between w-full min-w-0").Children(
+                                ui.Text("Music Player", "font-tiny text-sdv-dark truncate flex-1 mr-1").Id("track_artist"),
                                 ui.Text("0:00 / 0:00", "font-tiny text-sdv-muted shrink-0").Id("hud_time")
                             ),
-                            ui.Div("w-full py-1").Id("progress_row").Children(
-                                ui.ProgressBar("hud_progress_bar", 0f, 100f, "w-full h-2 sdv-bar")
+                            ui.Div("w-full").Id("progress_row").Children(
+                                ui.ProgressBar("hud_progress_bar", 0f, 100f, "w-full h-1.5 sdv-bar")
                             ),
-                            ui.Div("flex flex-row items-center justify-between w-full pt-1").Id("controls_row").Children(
-                                ui.Div("flex flex-row items-center gap-2").Children(
-                                    ui.ArrowLeft("btn_prev", "prev"),
-                                    ui.Button("btn_playpause", "Play", "playpause", "px-3"),
-                                    ui.ArrowRight("btn_next", "next")
-                                ),
-                                ui.Button("btn_open_hub", "Hub [F6]", "open_menu", "px-2")
+                            ui.Div("flex flex-row items-center justify-center gap-6 w-full h-5").Id("controls_row").Children(
+                                ui.Div("w-6 h-5 flex items-center justify-center").Id("btn_prev").OnClick("prev"),
+                                ui.Div("w-6 h-5 flex items-center justify-center").Id("btn_playpause").OnClick("playpause"),
+                                ui.Div("w-6 h-5 flex items-center justify-center").Id("btn_next").OnClick("next")
                             )
                         )
                     )
@@ -169,12 +168,6 @@ namespace JunimoJamsRusted.UI
 
             this._view.SetText("track_title", displayTitle);
             this._view.SetText("track_artist", displayArtist);
-
-            string status = track.IsPlaying ? "Playing" : (track.Name == "Not Running" ? "Idle" : "Paused");
-            this._view.SetText("hud_badge", status);
-
-            string btnLabel = track.IsPlaying ? "Pause" : "Play";
-            this._view.SetText("btn_playpause", btnLabel);
 
             this._view.SetVisible("controls_row", this._config.ShowPlaybackButtons);
             this._view.SetVisible("album_art_slot", this._config.ShowAlbumArt);
@@ -232,25 +225,220 @@ namespace JunimoJamsRusted.UI
         public bool UpdateInput(float mouseX, float mouseY, bool leftMouseDown)
         {
             if (this._view == null) return false;
-            return this._view.UpdateInput(mouseX, mouseY, leftMouseDown, 0f);
+
+            int cardX = this._config.HudPositionX;
+            int cardY = this._config.HudPositionY;
+            int ctrlY = cardY + 54;
+
+            Rectangle prevHit = new Rectangle(cardX + 148, ctrlY - 4, 24, 24);
+            Rectangle playHit = new Rectangle(cardX + 182, ctrlY - 4, 24, 24);
+            Rectangle nextHit = new Rectangle(cardX + 216, ctrlY - 4, 24, 24);
+
+            bool handled = false;
+            if (leftMouseDown && !this._wasMouseDown)
+            {
+                if (prevHit.Contains((int)mouseX, (int)mouseY))
+                {
+                    this._musicService.PreviousTrack();
+                    this._onStateChangedAction();
+                    handled = true;
+                }
+                else if (playHit.Contains((int)mouseX, (int)mouseY))
+                {
+                    this._musicService.TogglePlayPause();
+                    this._onStateChangedAction();
+                    handled = true;
+                }
+                else if (nextHit.Contains((int)mouseX, (int)mouseY))
+                {
+                    this._musicService.NextTrack();
+                    this._onStateChangedAction();
+                    handled = true;
+                }
+            }
+
+            this._wasMouseDown = leftMouseDown;
+
+            bool viewHandled = this._view.UpdateInput(mouseX, mouseY, leftMouseDown, 0f);
+            return handled || viewHandled;
         }
 
         public void Draw(SpriteBatch spriteBatch, TrackInfo track)
         {
             if (this._view == null) return;
 
-            // Render RustedUI layout (Taffy flexbox, theme 9-slice box, badges, fonts, buttons, tooltips)
+            // 1. Render RustedUI base layout (Taffy flexbox, theme window, typography, progress bar)
             this._view.Draw(spriteBatch);
 
-            // Overlay High-Resolution Rounded Album Art if available
+            int cardX = this._config.HudPositionX;
+            int cardY = this._config.HudPositionY;
+
+            // 2. Overlay High-Resolution Album Art (flush 64x64 inside slot at cardX + 8, cardY + 8)
             if (this._config.ShowAlbumArt && track.CoverArt != null && !track.CoverArt.IsDisposed)
             {
-                int artX = this._config.HudPositionX + 24 + 4;
-                int artY = this._config.HudPositionY + 24 + 4;
-                Rectangle destRect = new Rectangle(artX, artY, 64, 64);
-
-                this.DrawRoundedArt(spriteBatch, track.CoverArt, destRect, radius: 6);
+                Rectangle artRect = new Rectangle(cardX + 8, cardY + 8, 64, 64);
+                this.DrawRoundedArt(spriteBatch, track.CoverArt, artRect, radius: 4);
             }
+
+            // 3. Draw Animated Equalizer Bars when track is playing (Image 1 aesthetic)
+            if (track.IsPlaying)
+            {
+                this._equalizer.Update(isPlaying: true);
+                float[] bars = this._equalizer.GetBars();
+                int eqX = cardX + 78;
+                int eqY = cardY + 36;
+                for (int i = 0; i < 3; i++)
+                {
+                    int barHeight = Math.Max(2, (int)(bars[i] * 8f));
+                    Rectangle barRect = new Rectangle(eqX + (i * 3), eqY - barHeight + 6, 2, barHeight);
+                    spriteBatch.Draw(Game1.staminaRect, barRect, new Color(134, 239, 172, 220));
+                }
+            }
+
+            // 4. Draw Lucide Media Control Icons (Prev, Play/Pause, Next)
+            if (this._config.ShowPlaybackButtons)
+            {
+                Texture2D atlas = this.GetOrCreateMediaIconsTexture();
+                float mouseX = Game1.getMouseX(ui_scale: true);
+                float mouseY = Game1.getMouseY(ui_scale: true);
+
+                int ctrlY = cardY + 54;
+                Rectangle prevRect = new Rectangle(cardX + 152, ctrlY, 16, 16);
+                Rectangle playRect = new Rectangle(cardX + 186, ctrlY, 16, 16);
+                Rectangle nextRect = new Rectangle(cardX + 220, ctrlY, 16, 16);
+
+                Rectangle prevHit = new Rectangle(prevRect.X - 4, prevRect.Y - 4, 24, 24);
+                Rectangle playHit = new Rectangle(playRect.X - 4, playRect.Y - 4, 24, 24);
+                Rectangle nextHit = new Rectangle(nextRect.X - 4, nextRect.Y - 4, 24, 24);
+
+                Color normalColor = new Color(210, 220, 220, 220);
+                Color hoverColor = Color.White;
+
+                // Draw Prev (glyph 0)
+                Color prevCol = prevHit.Contains((int)mouseX, (int)mouseY) ? hoverColor : normalColor;
+                spriteBatch.Draw(atlas, prevRect, new Rectangle(0, 0, 16, 16), prevCol);
+
+                // Draw Play / Pause (glyph 1 = Play, glyph 2 = Pause)
+                int playSrcX = track.IsPlaying ? 32 : 16;
+                Color playCol = playHit.Contains((int)mouseX, (int)mouseY) ? hoverColor : normalColor;
+                spriteBatch.Draw(atlas, playRect, new Rectangle(playSrcX, 0, 16, 16), playCol);
+
+                // Draw Next (glyph 3)
+                Color nextCol = nextHit.Contains((int)mouseX, (int)mouseY) ? hoverColor : normalColor;
+                spriteBatch.Draw(atlas, nextRect, new Rectangle(48, 0, 16, 16), nextCol);
+            }
+        }
+
+        private Texture2D GetOrCreateMediaIconsTexture()
+        {
+            if (this._mediaIconsTexture != null && !this._mediaIconsTexture.IsDisposed)
+                return this._mediaIconsTexture;
+
+            const int width = 64;
+            const int height = 16;
+            Color[] pixels = new Color[width * height];
+
+            string[][] glyphs = new[]
+            {
+                // 0: Prev (vertical bar + left-pointing triangle)
+                new[] {
+                    "................",
+                    "................",
+                    ".##...######....",
+                    ".##...#####.....",
+                    ".##...####......",
+                    ".##...###.......",
+                    ".##...##........",
+                    ".##...###.......",
+                    ".##...####......",
+                    ".##...#####.....",
+                    ".##...######....",
+                    "................",
+                    "................",
+                    "................",
+                    "................",
+                    "................"
+                },
+                // 1: Play (right-pointing triangle)
+                new[] {
+                    "................",
+                    "................",
+                    "..##............",
+                    "..####..........",
+                    "..######........",
+                    "..########......",
+                    "..##########....",
+                    "..########......",
+                    "..######........",
+                    "..####..........",
+                    "..##............",
+                    "................",
+                    "................",
+                    "................",
+                    "................",
+                    "................"
+                },
+                // 2: Pause (two vertical bars)
+                new[] {
+                    "................",
+                    "................",
+                    "..####....####..",
+                    "..####....####..",
+                    "..####....####..",
+                    "..####....####..",
+                    "..####....####..",
+                    "..####....####..",
+                    "..####....####..",
+                    "..####....####..",
+                    "..####....####..",
+                    "................",
+                    "................",
+                    "................",
+                    "................",
+                    "................"
+                },
+                // 3: Next (right-pointing triangle + vertical bar)
+                new[] {
+                    "................",
+                    "................",
+                    "....######...##.",
+                    ".....#####...##.",
+                    "......####...##.",
+                    ".......###...##.",
+                    "........##...##.",
+                    ".......###...##.",
+                    "......####...##.",
+                    ".....#####...##.",
+                    "....######...##.",
+                    "................",
+                    "................",
+                    "................",
+                    "................",
+                    "................"
+                }
+            };
+
+            for (int iconIdx = 0; iconIdx < glyphs.Length; iconIdx++)
+            {
+                string[] rows = glyphs[iconIdx];
+                int baseX = iconIdx * 16;
+                for (int y = 0; y < 16 && y < rows.Length; y++)
+                {
+                    string row = rows[y];
+                    for (int x = 0; x < 16 && x < row.Length; x++)
+                    {
+                        if (row[x] == '#')
+                        {
+                            pixels[y * width + baseX + x] = Color.White;
+                        }
+                    }
+                }
+            }
+
+            Texture2D tex = new Texture2D(Game1.graphics.GraphicsDevice, width, height);
+            tex.SetData(pixels);
+            this._mediaIconsTexture = tex;
+            return tex;
         }
 
         private void DrawRoundedArt(SpriteBatch spriteBatch, Texture2D source, Rectangle dest, int radius)
@@ -316,6 +504,9 @@ namespace JunimoJamsRusted.UI
 
             this._roundedArtCache?.Dispose();
             this._roundedArtCache = null;
+
+            this._mediaIconsTexture?.Dispose();
+            this._mediaIconsTexture = null;
 
             this._textureCache.Dispose();
         }
