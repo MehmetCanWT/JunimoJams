@@ -11,13 +11,18 @@ namespace JunimoJamsRusted.Services
         public MusicService(string[]? extraPlayers = null)
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                this._player = new WindowsMusicPlayer(extraPlayers);
+            {
+                if (WineDetector.IsRunningUnderWineOrProton())
+                    this._player = new LinuxMusicPlayer(extraPlayers);
+                else
+                    this._player = new WindowsMusicPlayer(extraPlayers);
+            }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
                 this._player = new MacMusicPlayer(extraPlayers);
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 this._player = new LinuxMusicPlayer(extraPlayers);
             else
-                this._player = new WindowsMusicPlayer(extraPlayers); // Fallback
+                this._player = new LinuxMusicPlayer(extraPlayers); // Fallback
         }
 
         public TrackInfo GetCurrentTrack()

@@ -114,7 +114,7 @@ namespace JunimoJamsRusted.Services.Platform
 
         private string? GetActivePlayer()
         {
-            string names = this.RunShellCommand("dbus-send --print-reply --dest=org.freedesktop.DBus /org/freedesktop.DBus org.freedesktop.DBus.ListNames");
+            string names = this.RunShellCommand("dbus-send --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.ListNames");
             string[] lines = names.Split('\n');
             
             // Check priority list first (extract exact bus name from line)
@@ -180,6 +180,12 @@ namespace JunimoJamsRusted.Services.Platform
                     arguments = "";
                 }
 
+                if (WineDetector.IsRunningUnderWineOrProton())
+                {
+                    arguments = $"/c start /unix /usr/bin/{fileName} {arguments}";
+                    fileName = "cmd.exe";
+                }
+
                 using var process = new Process
                 {
                     StartInfo = new ProcessStartInfo
@@ -193,7 +199,7 @@ namespace JunimoJamsRusted.Services.Platform
                 };
                 process.Start();
                 string result = process.StandardOutput.ReadToEnd();
-                process.WaitForExit();
+                process.WaitForExit(1000);
                 return result;
             }
             catch
