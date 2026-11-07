@@ -10,19 +10,24 @@ namespace JunimoJamsRusted.Services
 
         public MusicService(string[]? extraPlayers = null)
         {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            // Fully plug-and-play zero-dependency routing:
+            // Under Proton or Native Linux, connect directly to the host D-Bus session socket.
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || WineDetector.IsRunningUnderWineOrProton())
             {
-                if (WineDetector.IsRunningUnderWineOrProton())
-                    this._player = new LinuxMusicPlayer(extraPlayers);
-                else
-                    this._player = new WindowsMusicPlayer(extraPlayers);
+                this._player = new PureDbusSocketClient(extraPlayers);
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
                 this._player = new MacMusicPlayer(extraPlayers);
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                this._player = new LinuxMusicPlayer(extraPlayers);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                this._player = new WindowsMusicPlayer(extraPlayers);
+            }
             else
-                this._player = new LinuxMusicPlayer(extraPlayers); // Fallback
+            {
+                this._player = new PureDbusSocketClient(extraPlayers);
+            }
         }
 
         public TrackInfo GetCurrentTrack()
