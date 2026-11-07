@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>JunimoJamsRusted</AssemblyName>
+    <RootNamespace>JunimoJamsRusted</RootNamespace>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <ModZipName>$(AssemblyName)</ModZipName>
+    <GamePath>/home/mehmetcan/.local/share/Steam/steamapps/common/Stardew Valley</GamePath>
+    <DeployModFolderName>JunimoJamsRusted</DeployModFolderName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Rusted.Smapi">
+      <HintPath Condition="Exists('$(GamePath)/Mods/Rusted.Smapi/Rusted.Smapi.dll')">$(GamePath)/Mods/Rusted.Smapi/Rusted.Smapi.dll</HintPath>
+      <HintPath Condition="!Exists('$(GamePath)/Mods/Rusted.Smapi/Rusted.Smapi.dll')">../../Rusted/src/Rusted.Smapi/bin/Release/net6.0/Rusted.Smapi.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="MonoGame.Framework">
+      <HintPath>$(GamePath)/MonoGame.Framework.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="assets/**/*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
