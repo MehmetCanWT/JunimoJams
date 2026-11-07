@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using JunimoJamsRusted.Services.Platform;
+using StardewModdingAPI;
 
 namespace JunimoJamsRusted.Services
 {
@@ -8,13 +9,13 @@ namespace JunimoJamsRusted.Services
     {
         private readonly IMusicPlayer _player;
 
-        public MusicService(string[]? extraPlayers = null)
+        public MusicService(string[]? extraPlayers = null, Action<string, LogLevel>? logger = null)
         {
             // Fully plug-and-play zero-dependency routing:
             // Under Proton or Native Linux, use the non-blocking background AsyncProtonMprisClient
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || WineDetector.IsRunningUnderWineOrProton())
             {
-                this._player = new AsyncProtonMprisClient(extraPlayers);
+                this._player = new AsyncProtonMprisClient(extraPlayers, logger);
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
@@ -26,7 +27,7 @@ namespace JunimoJamsRusted.Services
             }
             else
             {
-                this._player = new AsyncProtonMprisClient(extraPlayers);
+                this._player = new AsyncProtonMprisClient(extraPlayers, logger);
             }
         }
 

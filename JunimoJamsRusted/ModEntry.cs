@@ -40,7 +40,7 @@ namespace JunimoJamsRusted
                 // Ensure native FFI resolver is initialized
                 NativeResolver.Initialize(helper, this.Monitor);
 
-                this._musicService = new MusicService(this._config.ExtraPlayers);
+                this._musicService = new MusicService(this._config.ExtraPlayers, (msg, lvl) => this.Monitor.Log(msg, lvl));
                 this._artService = new ArtService(helper.DirectoryPath);
                 this._hud = new RustedMusicHud(
                     this._config,

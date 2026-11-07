@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using StardewModdingAPI;
 
 namespace JunimoJamsRusted.Services.Platform
 {
@@ -24,6 +26,7 @@ namespace JunimoJamsRusted.Services.Platform
     public sealed class AsyncProtonMprisClient : IMusicPlayer, IDisposable
     {
         private readonly string[] _priorityPlayers;
+        private readonly Action<string, LogLevel>? _logger;
         private readonly Thread _workerThread;
         private readonly CancellationTokenSource _cts = new();
         private readonly ConcurrentQueue<MprisCommandType> _commandQueue = new();
@@ -38,8 +41,10 @@ namespace JunimoJamsRusted.Services.Platform
         private readonly byte[] _readBuffer = new byte[65536];
         private DateTime _lastPollTime = DateTime.MinValue;
 
-        public AsyncProtonMprisClient(string[]? extraPlayers = null)
+        public AsyncProtonMprisClient(string[]? extraPlayers = null, Action<string, LogLevel>? logger = null)
         {
+            this._logger = logger;
+
             var players = new List<string>
             {
                 "bitchord", "spotify", "tidal-hifi", "cider", "deezer",
@@ -70,6 +75,11 @@ namespace JunimoJamsRusted.Services.Platform
             this._workerThread.Start();
         }
 
+        private void Log(string message, LogLevel level = LogLevel.Debug)
+        {
+            this._logger?.Invoke("[JunimoJams MPRIS] " + message, level);
+        }
+
         #region IMusicPlayer Interface (Zero-Stall, Called by Main Game Thread)
 
         public TrackInfo GetCurrentTrack() => this._latestTrack;
@@ -86,6 +96,8 @@ namespace JunimoJamsRusted.Services.Platform
 
         private void WorkerLoop()
         {
+            this.Log("Background MPRIS worker thread started.", LogLevel.Trace);
+
             while (!this._cts.IsCancellationRequested)
             {
                 try
@@ -94,6 +106,14 @@ namespace JunimoJamsRusted.Services.Platform
                     {
                         if (!this.TryConnect())
                         {
+                            // If direct socket failed, attempt fallback host process bridge
+                            if (this.TryFallbackHostBridge())
+                            {
+                                this.ProcessPendingCommandsFallback();
+                                Thread.Sleep(1000);
+                                continue;
+                            }
+
                             Thread.Sleep(2000);
                             continue;
                         }
@@ -107,6 +127,7 @@ namespace JunimoJamsRusted.Services.Platform
                     {
                         if (!this.ReceiveAndProcessMessages())
                         {
+                            this.Log("Socket disconnect or error detected during polling. Closing.", LogLevel.Debug);
                             this.CloseSocket();
                             continue;
                         }
@@ -123,69 +144,104 @@ namespace JunimoJamsRusted.Services.Platform
                 {
                     break;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    this.Log($"Unexpected exception in MPRIS worker loop: {ex.Message}", LogLevel.Warn);
                     this.CloseSocket();
                     Thread.Sleep(1500);
                 }
             }
 
             this.CloseSocket();
+            this.Log("Background MPRIS worker thread stopped.", LogLevel.Trace);
         }
 
         private bool TryConnect()
         {
             this.CloseSocket();
 
-            string? socketPath = ResolveSocketPath();
-            if (string.IsNullOrEmpty(socketPath) || !File.Exists(socketPath))
-                return false;
-
-            try
+            List<string> candidates = GetCandidateSocketPaths();
+            foreach (string path in candidates)
             {
-                var endpoint = new UnixDomainSocketEndPoint(socketPath);
-                var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified)
+                try
                 {
-                    ReceiveTimeout = 1500,
-                    SendTimeout = 1500,
-                    Blocking = true
-                };
+                    this.Log($"Trying candidate D-Bus socket: '{path}'...", LogLevel.Trace);
 
-                socket.Connect(endpoint);
+                    var endpoint = new UnixDomainSocketEndPoint(path);
+                    var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified)
+                    {
+                        ReceiveTimeout = 2000,
+                        SendTimeout = 2000,
+                        Blocking = true
+                    };
 
-                // SASL EXTERNAL Handshake: \0AUTH EXTERNAL 31303030\r\n (1000 in hex)
-                byte[] auth = Encoding.ASCII.GetBytes("\0AUTH EXTERNAL 31303030\r\n");
-                socket.Send(auth);
+                    socket.Connect(endpoint);
+                    this.Log($"Connected to socket: '{path}'. Starting SASL authentication...", LogLevel.Info);
 
-                int read = socket.Receive(this._readBuffer);
-                string authReply = Encoding.ASCII.GetString(this._readBuffer, 0, read);
-                if (!authReply.StartsWith("OK"))
-                {
-                    socket.Send(Encoding.ASCII.GetBytes("AUTH EXTERNAL\r\n"));
-                    read = socket.Receive(this._readBuffer);
+                    // SASL EXTERNAL Handshake:
+                    // 1. Send \0AUTH EXTERNAL 31303030\r\n (hex 1000)
+                    byte[] auth = Encoding.ASCII.GetBytes("\0AUTH EXTERNAL 31303030\r\n");
+                    socket.Send(auth);
+
+                    byte[] authBuf = new byte[256];
+                    int read = socket.Receive(authBuf);
+                    string authReply = Encoding.ASCII.GetString(authBuf, 0, read);
+                    this.Log($"SASL reply 1: {authReply.Trim()}", LogLevel.Trace);
+
+                    if (!authReply.StartsWith("OK"))
+                    {
+                        // Fallback: send \0AUTH EXTERNAL\r\n without credentials to let kernel verify SO_PEERCRED
+                        socket.Send(Encoding.ASCII.GetBytes("AUTH EXTERNAL\r\n"));
+                        read = socket.Receive(authBuf);
+                        authReply = Encoding.ASCII.GetString(authBuf, 0, read);
+                        this.Log($"SASL reply 2: {authReply.Trim()}", LogLevel.Trace);
+                    }
+
+                    if (!authReply.StartsWith("OK"))
+                    {
+                        this.Log($"SASL authentication failed on socket: '{path}'", LogLevel.Warn);
+                        socket.Dispose();
+                        continue;
+                    }
+
+                    // Complete SASL exchange
+                    socket.Send(Encoding.ASCII.GetBytes("BEGIN\r\n"));
+
+                    this._socket = socket;
+
+                    // Register with bus via Hello
+                    this.SendMethodCall("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "Hello", null, Array.Empty<byte>());
+                    byte[]? helloReply = this.ReceiveMethodReply();
+                    if (helloReply != null)
+                    {
+                        string assignedName = ExtractStringFromBody(helloReply);
+                        this.Log($"D-Bus Hello succeeded! Assigned bus name: {assignedName}", LogLevel.Info);
+                    }
+                    else
+                    {
+                        this.Log("D-Bus Hello received no reply; proceeding with caution.", LogLevel.Warn);
+                    }
+
+                    // Subscribe to MPRIS PropertiesChanged signals & NameOwnerChanged signals
+                    this.AddMatchRule("type='signal',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',path='/org/mpris/MediaPlayer2'");
+                    this.AddMatchRule("type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',member='NameOwnerChanged'");
+
+                    // Initial player scan and immediate refresh
+                    this.DetectActivePlayer();
+                    if (!string.IsNullOrEmpty(this._activePlayer))
+                    {
+                        this.RefreshPlayerState();
+                    }
+
+                    return true;
                 }
-
-                socket.Send(Encoding.ASCII.GetBytes("BEGIN\r\n"));
-
-                this._socket = socket;
-
-                // Register with bus via Hello
-                this.SendMethodCall("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "Hello", null, Array.Empty<byte>());
-                this.ReceiveMessageSync();
-
-                // Subscribe to MPRIS PropertiesChanged signals & NameOwnerChanged signals
-                this.AddMatchRule("type='signal',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',path='/org/mpris/MediaPlayer2'");
-                this.AddMatchRule("type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',member='NameOwnerChanged'");
-
-                // Initial player scan
-                this.DetectActivePlayer();
-                return true;
+                catch (Exception ex)
+                {
+                    this.Log($"Failed to connect via socket '{path}': {ex.Message}", LogLevel.Trace);
+                }
             }
-            catch
-            {
-                this.CloseSocket();
-                return false;
-            }
+
+            return false;
         }
 
         private void CloseSocket()
@@ -205,24 +261,48 @@ namespace JunimoJamsRusted.Services.Platform
             this._activePlayer = null;
         }
 
-        private static string? ResolveSocketPath()
+        private static List<string> GetCandidateSocketPaths()
         {
-            string?[] candidates = new string?[]
-            {
-                Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is string xdg ? Path.Combine(xdg, "bus") : null,
-                @"Z:\run\user\1000\bus",
-                "/run/user/1000/bus",
-                Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is string xdgWine ? Path.Combine(@"Z:", xdgWine.TrimStart('/'), "bus") : null,
-                @"Z:\tmp\dbus-session",
-                "/tmp/dbus-session"
-            };
+            var list = new List<string>();
 
-            foreach (string? path in candidates)
+            void AddIfValid(string? p)
             {
-                if (!string.IsNullOrEmpty(path) && File.Exists(path))
-                    return path;
+                if (!string.IsNullOrWhiteSpace(p) && !list.Contains(p))
+                    list.Add(p);
             }
 
+            // 1. DBUS_SESSION_BUS_ADDRESS environment variable
+            string? dbusEnv = Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS");
+            if (!string.IsNullOrEmpty(dbusEnv))
+            {
+                // Format: unix:path=/run/user/1000/bus,...
+                int pIdx = dbusEnv.IndexOf("path=", StringComparison.OrdinalIgnoreCase);
+                if (pIdx != -1)
+                {
+                    int end = dbusEnv.IndexOf(',', pIdx);
+                    if (end == -1) end = dbusEnv.Length;
+                    string rawPath = dbusEnv.Substring(pIdx + 5, end - (pIdx + 5)).Trim();
+
+                    AddIfValid(rawPath);
+                    if (rawPath.StartsWith("/"))
+                        AddIfValid(@"Z:" + rawPath.Replace('/', '\\'));
+                }
+            }
+
+            // 2. Standard user 1000 bus paths (Host systemd default)
+            AddIfValid(@"Z:\run\user\1000\bus");
+            AddIfValid("/run/user/1000/bus");
+
+            // 3. XDG_RUNTIME_DIR variable
+            string? xdg = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+            if (!string.IsNullOrEmpty(xdg))
+            {
+                AddIfValid(Path.Combine(xdg, "bus"));
+                if (xdg.StartsWith("/"))
+                    AddIfValid(@"Z:" + xdg.Replace('/', '\\').TrimEnd('\\') + @"\bus");
+            }
+
+            // 4. Dynamic UID scanning under Z:\run\user\
             string[] baseDirs = new[] { @"Z:\run\user", "/run/user" };
             foreach (string baseDir in baseDirs)
             {
@@ -232,15 +312,23 @@ namespace JunimoJamsRusted.Services.Platform
                     {
                         foreach (string userDir in Directory.GetDirectories(baseDir))
                         {
-                            string bus = Path.Combine(userDir, "bus");
-                            if (File.Exists(bus)) return bus;
+                            AddIfValid(Path.Combine(userDir, "bus"));
+                            if (userDir.StartsWith("Z:", StringComparison.OrdinalIgnoreCase))
+                            {
+                                string posix = userDir.Substring(2).Replace('\\', '/') + "/bus";
+                                AddIfValid(posix);
+                            }
                         }
                     }
                 }
                 catch { }
             }
 
-            return null;
+            // 5. Fallback paths
+            AddIfValid(@"Z:\tmp\dbus-session");
+            AddIfValid("/tmp/dbus-session");
+
+            return list;
         }
 
         #endregion
@@ -262,6 +350,8 @@ namespace JunimoJamsRusted.Services.Platform
                     _ => "PlayPause"
                 };
 
+                this.Log($"Sending MPRIS command '{member}' to {this._activePlayer}...", LogLevel.Debug);
+
                 // Flags: 0x01 = NO_REPLY_EXPECTED (Fire and forget! No waiting for reply packet)
                 byte[] msg = BuildDbusMessage(
                     dest: this._activePlayer,
@@ -278,8 +368,9 @@ namespace JunimoJamsRusted.Services.Platform
                 {
                     this._socket.Send(msg);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    this.Log($"Failed to send command '{member}': {ex.Message}", LogLevel.Warn);
                     this.CloseSocket();
                     break;
                 }
@@ -305,7 +396,7 @@ namespace JunimoJamsRusted.Services.Platform
                 // Query PlaybackStatus
                 this.SendMethodCall(this._activePlayer, "/org/mpris/MediaPlayer2", "org.freedesktop.DBus.Properties", "Get", "ss",
                     EncodeStringPropertyArgs("org.mpris.MediaPlayer2.Player", "PlaybackStatus"));
-                byte[]? statusReply = this.ReceiveMessageSync();
+                byte[]? statusReply = this.ReceiveMethodReply();
 
                 bool isPlaying = false;
                 if (statusReply != null)
@@ -317,7 +408,7 @@ namespace JunimoJamsRusted.Services.Platform
                 // Query Metadata
                 this.SendMethodCall(this._activePlayer, "/org/mpris/MediaPlayer2", "org.freedesktop.DBus.Properties", "Get", "ss",
                     EncodeStringPropertyArgs("org.mpris.MediaPlayer2.Player", "Metadata"));
-                byte[]? metaReply = this.ReceiveMessageSync();
+                byte[]? metaReply = this.ReceiveMethodReply();
 
                 string title = "Unknown";
                 string artist = "Unknown";
@@ -344,12 +435,18 @@ namespace JunimoJamsRusted.Services.Platform
                 TimeSpan position = TimeSpan.Zero;
                 this.SendMethodCall(this._activePlayer, "/org/mpris/MediaPlayer2", "org.freedesktop.DBus.Properties", "Get", "ss",
                     EncodeStringPropertyArgs("org.mpris.MediaPlayer2.Player", "Position"));
-                byte[]? posReply = this.ReceiveMessageSync();
+                byte[]? posReply = this.ReceiveMethodReply();
                 if (posReply != null)
                 {
                     long posMicro = ExtractVariantInt64(posReply);
                     if (posMicro >= 0)
                         position = TimeSpan.FromMilliseconds(posMicro / 1000.0);
+                }
+
+                // Log change if title or playback state changed
+                if (this._latestTrack.Name != title || this._latestTrack.IsPlaying != isPlaying)
+                {
+                    this.Log($"Active Track: '{title}' by '{artist}' [{(isPlaying ? "Playing" : "Paused")}]", LogLevel.Info);
                 }
 
                 // Atomically update snapshot for GameLoop.UpdateTicked
@@ -366,8 +463,9 @@ namespace JunimoJamsRusted.Services.Platform
                     DirectArtUri = artUrl
                 };
             }
-            catch
+            catch (Exception ex)
             {
+                this.Log($"Error refreshing player state: {ex.Message}", LogLevel.Debug);
                 this.CloseSocket();
             }
         }
@@ -377,7 +475,7 @@ namespace JunimoJamsRusted.Services.Platform
             try
             {
                 this.SendMethodCall("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "ListNames", null, Array.Empty<byte>());
-                byte[]? reply = this.ReceiveMessageSync();
+                byte[]? reply = this.ReceiveMethodReply();
                 if (reply == null) return;
 
                 string raw = Encoding.UTF8.GetString(reply);
@@ -394,7 +492,12 @@ namespace JunimoJamsRusted.Services.Platform
                     idx = end + 1;
                 }
 
-                // Match against priority list (BitChord, Spotify, etc.)
+                if (activeNames.Count > 0)
+                {
+                    this.Log($"Found {activeNames.Count} MPRIS players: {string.Join(", ", activeNames)}", LogLevel.Info);
+                }
+
+                // Match against priority list (bitchord, spotify, etc.)
                 foreach (string priority in this._priorityPlayers)
                 {
                     string target = $"org.mpris.MediaPlayer2.{priority}";
@@ -403,15 +506,21 @@ namespace JunimoJamsRusted.Services.Platform
                         if (name.StartsWith(target, StringComparison.OrdinalIgnoreCase))
                         {
                             this._activePlayer = name;
+                            this.Log($"Selected active player by priority: {name}", LogLevel.Info);
                             return;
                         }
                     }
                 }
 
                 this._activePlayer = activeNames.Count > 0 ? activeNames[0] : null;
+                if (this._activePlayer != null)
+                {
+                    this.Log($"Selected default active player: {this._activePlayer}", LogLevel.Info);
+                }
             }
-            catch
+            catch (Exception ex)
             {
+                this.Log($"Error detecting active player: {ex.Message}", LogLevel.Debug);
                 this.CloseSocket();
             }
         }
@@ -426,41 +535,17 @@ namespace JunimoJamsRusted.Services.Platform
             w.Write((byte)0);
 
             this.SendMethodCall("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "AddMatch", "s", ms.ToArray());
-            this.ReceiveMessageSync();
+            this.ReceiveMethodReply();
         }
 
         private bool ReceiveAndProcessMessages()
         {
             if (this._socket == null) return false;
 
-            int bytesRead;
-            try
-            {
-                bytesRead = this._socket.Receive(this._readBuffer, 0, 16, SocketFlags.None);
-                if (bytesRead <= 0) return false;
-            }
-            catch
-            {
-                return false;
-            }
+            byte[]? msg = this.ReceiveSingleMessage();
+            if (msg == null) return false;
 
-            uint bodyLen = BitConverter.ToUInt32(this._readBuffer, 4);
-            uint fieldsLen = BitConverter.ToUInt32(this._readBuffer, 12);
-            int headerLen = 16 + (int)fieldsLen;
-            int rem = headerLen % 8;
-            if (rem != 0) headerLen += (8 - rem);
-
-            int totalExpected = headerLen + (int)bodyLen;
-            int totalRead = bytesRead;
-
-            while (totalRead < totalExpected && totalRead < this._readBuffer.Length)
-            {
-                int more = this._socket.Receive(this._readBuffer, totalRead, Math.Min(this._readBuffer.Length - totalRead, totalExpected - totalRead), SocketFlags.None);
-                if (more <= 0) return false;
-                totalRead += more;
-            }
-
-            byte msgType = this._readBuffer[1];
+            byte msgType = msg[1];
             if (msgType == 4) // SIGNAL (PropertiesChanged or NameOwnerChanged)
             {
                 this.RefreshPlayerState();
@@ -469,14 +554,43 @@ namespace JunimoJamsRusted.Services.Platform
             return true;
         }
 
-        private byte[]? ReceiveMessageSync()
+        private byte[]? ReceiveMethodReply()
         {
             if (this._socket == null) return null;
 
-            int totalRead = 0;
-            int bytesRead = this._socket.Receive(this._readBuffer, 0, 16, SocketFlags.None);
-            if (bytesRead <= 0) return null;
-            totalRead += bytesRead;
+            // Wait for METHOD_RETURN (type 2) or ERROR (type 3). If signals arrive while waiting, process them.
+            for (int attempt = 0; attempt < 5; attempt++)
+            {
+                byte[]? msg = this.ReceiveSingleMessage();
+                if (msg == null) return null;
+
+                byte msgType = msg[1];
+                if (msgType == 2) // METHOD_RETURN
+                {
+                    return msg;
+                }
+                else if (msgType == 3) // ERROR
+                {
+                    this.Log("D-Bus method returned error message.", LogLevel.Debug);
+                    return null;
+                }
+                else if (msgType == 4) // SIGNAL
+                {
+                    // Signal arrived while waiting for reply; handle it and keep waiting
+                    this.RefreshPlayerState();
+                }
+            }
+
+            return null;
+        }
+
+        private byte[]? ReceiveSingleMessage()
+        {
+            if (this._socket == null) return null;
+
+            // 1. Read fixed 16-byte header
+            if (!ReadExact(this._socket, this._readBuffer, 0, 16))
+                return null;
 
             uint bodyLen = BitConverter.ToUInt32(this._readBuffer, 4);
             uint fieldsLen = BitConverter.ToUInt32(this._readBuffer, 12);
@@ -485,16 +599,42 @@ namespace JunimoJamsRusted.Services.Platform
             if (rem != 0) headerLen += (8 - rem);
 
             int totalExpected = headerLen + (int)bodyLen;
-            while (totalRead < totalExpected && totalRead < this._readBuffer.Length)
+            if (totalExpected > this._readBuffer.Length)
             {
-                int more = this._socket.Receive(this._readBuffer, totalRead, Math.Min(this._readBuffer.Length - totalRead, totalExpected - totalRead), SocketFlags.None);
-                if (more <= 0) break;
-                totalRead += more;
+                this.Log($"D-Bus message too large ({totalExpected} bytes).", LogLevel.Warn);
+                return null;
             }
 
-            byte[] reply = new byte[totalRead];
-            Buffer.BlockCopy(this._readBuffer, 0, reply, 0, totalRead);
-            return reply;
+            // 2. Read remaining message bytes
+            int remaining = totalExpected - 16;
+            if (remaining > 0)
+            {
+                if (!ReadExact(this._socket, this._readBuffer, 16, remaining))
+                    return null;
+            }
+
+            byte[] fullMsg = new byte[totalExpected];
+            Buffer.BlockCopy(this._readBuffer, 0, fullMsg, 0, totalExpected);
+            return fullMsg;
+        }
+
+        private static bool ReadExact(Socket socket, byte[] buffer, int offset, int count)
+        {
+            int total = 0;
+            while (total < count)
+            {
+                try
+                {
+                    int read = socket.Receive(buffer, offset + total, count - total, SocketFlags.None);
+                    if (read <= 0) return false;
+                    total += read;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private void SendMethodCall(string dest, string path, string iface, string member, string? sig, byte[] body)
@@ -502,7 +642,158 @@ namespace JunimoJamsRusted.Services.Platform
             if (this._socket == null) return;
             uint serial = this._serial++;
             byte[] msg = BuildDbusMessage(dest, path, iface, member, sig, body, serial, flags: 0);
-            this._socket.Send(msg);
+            try
+            {
+                this._socket.Send(msg);
+            }
+            catch (Exception ex)
+            {
+                this.Log($"SendMethodCall '{member}' failed: {ex.Message}", LogLevel.Debug);
+                this.CloseSocket();
+            }
+        }
+
+        #endregion
+
+        #region Fallback Host Process Bridge (When AF_UNIX Direct Socket Is Blocked)
+
+        private bool TryFallbackHostBridge()
+        {
+            try
+            {
+                // Query active player via busctl or playerctl on host
+                string busName = this.ExecuteHostCommand("busctl --user list | grep -i mpris");
+                if (string.IsNullOrWhiteSpace(busName))
+                    return false;
+
+                string? active = null;
+                foreach (string priority in this._priorityPlayers)
+                {
+                    if (busName.Contains($"org.mpris.MediaPlayer2.{priority}", StringComparison.OrdinalIgnoreCase))
+                    {
+                        active = $"org.mpris.MediaPlayer2.{priority}";
+                        break;
+                    }
+                }
+
+                if (active == null)
+                {
+                    int mIdx = busName.IndexOf("org.mpris.MediaPlayer2.", StringComparison.Ordinal);
+                    if (mIdx != -1)
+                    {
+                        int end = busName.IndexOfAny(new[] { ' ', '\t', '\r', '\n' }, mIdx);
+                        if (end == -1) end = busName.Length;
+                        active = busName.Substring(mIdx, end - mIdx).Trim();
+                    }
+                }
+
+                if (string.IsNullOrEmpty(active))
+                    return false;
+
+                this._activePlayer = active;
+
+                // Query Status
+                string statusOut = this.ExecuteHostCommand($"busctl --user get-property {active} /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player PlaybackStatus");
+                bool isPlaying = statusOut.Contains("\"Playing\"", StringComparison.OrdinalIgnoreCase);
+
+                // Query Metadata
+                string metaOut = this.ExecuteHostCommand($"busctl --user get-property {active} /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player Metadata");
+
+                string title = "Unknown";
+                string artist = "Unknown";
+                string? artUrl = null;
+                TimeSpan duration = TimeSpan.Zero;
+
+                if (!string.IsNullOrWhiteSpace(metaOut))
+                {
+                    title = ExtractRegexProperty(metaOut, "xesam:title") ?? "Unknown";
+                    artist = ExtractRegexProperty(metaOut, "xesam:artist") ?? "Unknown";
+                    artUrl = ExtractRegexProperty(metaOut, "mpris:artUrl");
+
+                    string? lenStr = ExtractRegexProperty(metaOut, "mpris:length");
+                    if (long.TryParse(lenStr, out long lenMicro) && lenMicro > 0)
+                    {
+                        duration = TimeSpan.FromMilliseconds(lenMicro / 1000.0);
+                    }
+                }
+
+                this._latestTrack = new TrackInfo
+                {
+                    Name = title,
+                    Artist = artist,
+                    IsPlaying = isPlaying,
+                    Duration = duration,
+                    Position = TimeSpan.Zero,
+                    PlaybackRate = isPlaying ? 1.0f : 0.0f,
+                    LastPositionUpdateTime = DateTime.UtcNow,
+                    DirectArtUri = artUrl
+                };
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void ProcessPendingCommandsFallback()
+        {
+            if (string.IsNullOrEmpty(this._activePlayer)) return;
+
+            while (this._commandQueue.TryDequeue(out MprisCommandType cmd))
+            {
+                string member = cmd switch
+                {
+                    MprisCommandType.PlayPause => "PlayPause",
+                    MprisCommandType.Next => "Next",
+                    MprisCommandType.Previous => "Previous",
+                    _ => "PlayPause"
+                };
+
+                this.ExecuteHostCommand($"busctl --user call {this._activePlayer} /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player {member}");
+            }
+        }
+
+        private string ExecuteHostCommand(string linuxCommand)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/c start /unix {linuxCommand}",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var proc = Process.Start(psi);
+                if (proc == null) return string.Empty;
+
+                string result = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit(500);
+                return result;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string? ExtractRegexProperty(string text, string propKey)
+        {
+            int idx = text.IndexOf(propKey, StringComparison.OrdinalIgnoreCase);
+            if (idx == -1) return null;
+
+            int quoteStart = text.IndexOf('"', idx + propKey.Length);
+            if (quoteStart == -1) return null;
+
+            int quoteEnd = text.IndexOf('"', quoteStart + 1);
+            if (quoteEnd == -1) return null;
+
+            return text.Substring(quoteStart + 1, quoteEnd - quoteStart - 1);
         }
 
         #endregion
@@ -594,6 +885,17 @@ namespace JunimoJamsRusted.Services.Platform
             w.Write((byte)0);
 
             return ms.ToArray();
+        }
+
+        private static string ExtractStringFromBody(byte[] b)
+        {
+            int bodyStart = GetBodyStart(b);
+            if (bodyStart + 4 > b.Length) return string.Empty;
+
+            uint len = BitConverter.ToUInt32(b, bodyStart);
+            if (bodyStart + 4 + len > b.Length) return string.Empty;
+
+            return Encoding.UTF8.GetString(b, bodyStart + 4, (int)len);
         }
 
         private static string ExtractVariantString(byte[] b)
