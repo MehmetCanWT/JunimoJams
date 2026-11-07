@@ -6,6 +6,9 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <Version>5.4.0</Version>
+    <AssemblyVersion>5.4.0.0</AssemblyVersion>
+    <FileVersion>5.4.0.0</FileVersion>
     <ModZipName>$(AssemblyName)</ModZipName>
     <GamePath>/home/mehmetcan/.local/share/Steam/steamapps/common/Stardew Valley</GamePath>
     <DeployModFolderName>JunimoJams</DeployModFolderName>
