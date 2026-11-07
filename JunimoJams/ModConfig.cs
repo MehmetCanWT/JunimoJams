@@ -6,6 +6,7 @@ namespace JunimoJams
     public sealed class ModConfig
     {
         public bool ShowHud { get; set; } = true;
+        public bool OnlyAlbumArt { get; set; } = false;
         public bool EnableUiSounds { get; set; } = true;
 
         /// <summary>

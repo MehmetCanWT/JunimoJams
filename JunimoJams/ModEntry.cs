@@ -88,13 +88,14 @@ namespace JunimoJams
 
             configMenu.AddSectionTitle(this.ModManifest, () => "HUD Settings");
             configMenu.AddBoolOption(this.ModManifest, () => this._config.ShowHud, v => this._config.ShowHud = v, () => "Show HUD", () => "Toggle overlay visibility");
-            configMenu.AddBoolOption(this.ModManifest, () => this._config.EnableUiSounds, v => { this._config.EnableUiSounds = v; this._hud.ApplyConfigTheme(); }, () => "UI Sound Effects", () => "Enable audio feedback on button clicks");
-            configMenu.AddBoolOption(this.ModManifest, () => this._config.ShowAlbumArt, v => this._config.ShowAlbumArt = v, () => "Show Album Cover", () => "Toggle album art visibility");
+            configMenu.AddBoolOption(this.ModManifest, () => this._config.OnlyAlbumArt, v => this._config.OnlyAlbumArt = v, () => "Only Album Art", () => "Display only the compact album art widget");
+            configMenu.AddBoolOption(this.ModManifest, () => this._config.ShowAlbumArt, v => this._config.ShowAlbumArt = v, () => "Show Album Cover", () => "Toggle album art visibility in full HUD");
             configMenu.AddBoolOption(this.ModManifest, () => this._config.ShowPlaybackButtons, v => this._config.ShowPlaybackButtons = v, () => "Show Buttons", () => "Toggle playback controls visibility");
             configMenu.AddBoolOption(this.ModManifest, () => this._config.ShowProgressBar, v => this._config.ShowProgressBar = v, () => "Show Timeline Bar", () => "Toggle track progress bar");
             configMenu.AddBoolOption(this.ModManifest, () => this._config.EnableMarqueeText, v => this._config.EnableMarqueeText = v, () => "Marquee Scrolling", () => "Smoothly scroll long song and artist titles");
-            configMenu.AddBoolOption(this.ModManifest, () => this._config.OnlyShowInInventory, v => this._config.OnlyShowInInventory = v, () => "Only In Menu", () => "Show only when inventory open");
-            configMenu.AddBoolOption(this.ModManifest, () => this._config.HideOnMap, v => this._config.HideOnMap = v, () => "Hide On Map", () => "Hide when map or overlay menus are open");
+            configMenu.AddBoolOption(this.ModManifest, () => this._config.EnableUiSounds, v => this._config.EnableUiSounds = v, () => "UI Sound Effects", () => "Enable audio feedback on button clicks");
+            configMenu.AddBoolOption(this.ModManifest, () => this._config.OnlyShowInInventory, v => this._config.OnlyShowInInventory = v, () => "Only In Menus", () => "Show HUD only when inventory or menu is open");
+            configMenu.AddBoolOption(this.ModManifest, () => this._config.HideOnMap, v => this._config.HideOnMap = v, () => "Hide On Map", () => "Hide overlay when viewing the world map");
 
             string[] themeOptions = new[]
             {
@@ -355,17 +356,15 @@ namespace JunimoJams
 
             var menu = Game1.activeClickableMenu;
 
-            if (this._config.HideOnMap && menu != null)
+            if (this._config.HideOnMap && menu is GameMenu gameMenu && gameMenu.currentTab == GameMenu.mapTab)
             {
-                if (menu is not GameMenu)
-                    return false;
-
-                if (menu is GameMenu gameMenu && gameMenu.currentTab == GameMenu.mapTab)
-                    return false;
+                return false;
             }
 
             if (this._config.OnlyShowInInventory)
-                return menu is GameMenu;
+            {
+                return menu != null;
+            }
 
             return true;
         }

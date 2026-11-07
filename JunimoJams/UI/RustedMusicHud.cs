@@ -43,14 +43,20 @@ namespace JunimoJams.UI
             }
         }
 
-        private Texture2D? _cardBgTexture;
-        private Texture2D? _cardBorderTexture;
+        private Texture2D? _cardBg82;
+        private Texture2D? _cardBorder82;
+        private Texture2D? _cardBg56;
+        private Texture2D? _cardBorder56;
+        private Texture2D? _cardBg46;
+        private Texture2D? _cardBorder46;
+        private Texture2D? _boxBg76;
+        private Texture2D? _boxBorder76;
+
         private Texture2D? _artBgTexture;
         private Texture2D? _mediaIconsTexture;
         private Texture2D? _roundedArtCache;
         private string _roundedArtCacheKey = string.Empty;
 
-        private SpriteFont? _ruDialogueFont;
         private SpriteFont? _ruSmallFont;
 
         private bool _wasMouseDown;
@@ -89,21 +95,12 @@ namespace JunimoJams.UI
 
         private void EnsureFontsLoaded()
         {
-            if (this._ruDialogueFont != null && this._ruSmallFont != null)
+            if (this._ruSmallFont != null)
                 return;
 
             try
             {
-                this._ruDialogueFont ??= Game1.content.Load<SpriteFont>("Fonts/SpriteFont1.ru-RU");
-            }
-            catch
-            {
-                this._ruDialogueFont = Game1.dialogueFont;
-            }
-
-            try
-            {
-                this._ruSmallFont ??= Game1.content.Load<SpriteFont>("Fonts/SmallFont.ru-RU");
+                this._ruSmallFont = Game1.content.Load<SpriteFont>("Fonts/SmallFont.ru-RU");
             }
             catch
             {
@@ -114,12 +111,30 @@ namespace JunimoJams.UI
         private (SpriteFont font, float titleScale, float artistScale, float timeScale) GetFontAndScales(float s)
         {
             this.EnsureFontsLoaded();
-            bool isClassic = this._config.Theme == "PelicanClassic";
-            SpriteFont font = isClassic ? (this._ruSmallFont ?? Game1.smallFont) : (this._ruDialogueFont ?? Game1.dialogueFont);
-            float titleScale = (isClassic ? 0.62f : 0.38f) * s;
-            float artistScale = (isClassic ? 0.52f : 0.30f) * s;
-            float timeScale = (isClassic ? 0.52f : 0.30f) * s;
+            SpriteFont font = this._ruSmallFont ?? Game1.smallFont;
+            float titleScale = 0.75f * s;
+            float artistScale = 0.65f * s;
+            float timeScale = 0.65f * s;
             return (font, titleScale, artistScale, timeScale);
+        }
+
+        private static string SanitizeForFont(string text, SpriteFont font)
+        {
+            if (string.IsNullOrEmpty(text)) return text ?? "";
+            var sb = new System.Text.StringBuilder(text.Length);
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (font.Characters.Contains(c) || font.DefaultCharacter != null)
+                {
+                    sb.Append(c);
+                }
+                else
+                {
+                    sb.Append(' ');
+                }
+            }
+            return sb.ToString();
         }
 
         public void UpdatePerTickAnimations()
@@ -127,17 +142,19 @@ namespace JunimoJams.UI
             if (this._lastTrack.Name == "Not Running")
                 return;
 
-            if (this._config.EnableMarqueeText)
+            if (this._config.EnableMarqueeText && !this._config.OnlyAlbumArt)
             {
                 float s = Math.Clamp(this._config.HudScale, 0.5f, 2.5f);
                 if (s <= 0.01f) s = 1.0f;
 
                 var (font, titleScale, artistScale, timeScale) = this.GetFontAndScales(s);
 
+                bool showArt = this._config.ShowAlbumArt;
+                float maxTitleWidth = (showArt ? 228f : 288f) * s;
+
                 // Title measurements
                 string title = string.IsNullOrWhiteSpace(this._lastTrack.Name) ? "Not Running" : StringUtils.NormalizeForHud(this._lastTrack.Name);
-                float titlePixelWidth = font.MeasureString(title).X * titleScale;
-                float maxTitleWidth = 228f * s;
+                float titlePixelWidth = font.MeasureString(SanitizeForFont(title, font)).X * titleScale;
 
                 // Time width in Row 2
                 string timeStr = "0:00 / 0:00";
@@ -146,13 +163,13 @@ namespace JunimoJams.UI
                     TimeSpan currentPos = this._lastTrack.GetExtrapolatedPosition();
                     timeStr = $"{FormatTime(currentPos)} / {FormatTime(this._lastTrack.Duration)}";
                 }
-                float timeWidth = font.MeasureString(timeStr).X * timeScale;
+                float timeWidth = font.MeasureString(SanitizeForFont(timeStr, font)).X * timeScale;
 
                 // Artist measurements
                 string artist = string.IsNullOrWhiteSpace(this._lastTrack.Artist) ? "Music Player" : StringUtils.NormalizeForHud(this._lastTrack.Artist);
-                float artistPixelWidth = font.MeasureString(artist).X * artistScale;
+                float artistPixelWidth = font.MeasureString(SanitizeForFont(artist, font)).X * artistScale;
                 float eqWidth = this._lastTrack.IsPlaying ? (13f * s) : 0f;
-                float maxArtistWidth = Math.Max(30f * s, (228f * s) - timeWidth - (8f * s) - eqWidth);
+                float maxArtistWidth = Math.Max(30f * s, maxTitleWidth - timeWidth - (8f * s) - eqWidth);
 
                 this._marquee.Update(title, titlePixelWidth, maxTitleWidth, artist, artistPixelWidth, maxArtistWidth);
             }
@@ -160,7 +177,7 @@ namespace JunimoJams.UI
 
         public bool UpdateInput(float mouseX, float mouseY, bool leftMouseDown)
         {
-            if (!this._config.ShowHud || !this._config.ShowPlaybackButtons)
+            if (!this._config.ShowHud)
                 return false;
 
             float s = Math.Clamp(this._config.HudScale, 0.5f, 2.5f);
@@ -168,8 +185,32 @@ namespace JunimoJams.UI
 
             int cardX = this._config.HudPositionX;
             int cardY = this._config.HudPositionY;
+
+            if (this._config.OnlyAlbumArt)
+            {
+                int boxSize = (int)(76 * s);
+                Rectangle hit = new Rectangle(cardX, cardY, boxSize, boxSize);
+                bool isOver = hit.Contains((int)mouseX, (int)mouseY);
+                if (leftMouseDown && !this._wasMouseDown && isOver)
+                {
+                    if (this._config.EnableUiSounds) Game1.playSound("smallSelect");
+                    this._musicService.TogglePlayPause();
+                    this._onStateChangedAction();
+                    this._wasMouseDown = leftMouseDown;
+                    return true;
+                }
+                this._wasMouseDown = leftMouseDown;
+                return leftMouseDown && isOver;
+            }
+
+            if (!this._config.ShowPlaybackButtons)
+                return false;
+
+            bool showArt = this._config.ShowAlbumArt;
+            int unscaledHeight = (!this._config.ShowPlaybackButtons && !this._config.ShowProgressBar) ? 46 :
+                                 (!this._config.ShowPlaybackButtons) ? 56 : CARD_HEIGHT;
             int cardW = (int)(CARD_WIDTH * s);
-            int cardH = (int)(CARD_HEIGHT * s);
+            int cardH = (int)(unscaledHeight * s);
 
             Rectangle cardRect = new Rectangle(cardX, cardY, cardW, cardH);
             bool isOverCard = cardRect.Contains((int)mouseX, (int)mouseY);
@@ -177,8 +218,8 @@ namespace JunimoJams.UI
             float unscaledX = (mouseX - cardX) / s;
             float unscaledY = (mouseY - cardY) / s;
 
-            int colX = 82;
-            int colW = 228;
+            int colX = showArt ? 82 : 16;
+            int colW = showArt ? 228 : 288;
             int ctrlY = 58;
             int centerX = colX + (colW / 2);
 
@@ -191,21 +232,21 @@ namespace JunimoJams.UI
             {
                 if (prevHit.Contains((int)unscaledX, (int)unscaledY))
                 {
-                    Game1.playSound("smallSelect");
+                    if (this._config.EnableUiSounds) Game1.playSound("smallSelect");
                     this._musicService.PreviousTrack();
                     this._onStateChangedAction();
                     actionFired = true;
                 }
                 else if (playHit.Contains((int)unscaledX, (int)unscaledY))
                 {
-                    Game1.playSound("smallSelect");
+                    if (this._config.EnableUiSounds) Game1.playSound("smallSelect");
                     this._musicService.TogglePlayPause();
                     this._onStateChangedAction();
                     actionFired = true;
                 }
                 else if (nextHit.Contains((int)unscaledX, (int)unscaledY))
                 {
-                    Game1.playSound("smallSelect");
+                    if (this._config.EnableUiSounds) Game1.playSound("smallSelect");
                     this._musicService.NextTrack();
                     this._onStateChangedAction();
                     actionFired = true;
@@ -226,31 +267,129 @@ namespace JunimoJams.UI
 
             int cardX = this._config.HudPositionX;
             int cardY = this._config.HudPositionY;
-            int cardW = (int)(CARD_WIDTH * s);
-            int cardH = (int)(CARD_HEIGHT * s);
 
             HudThemeColors colors = GetThemeColors(this._config.Theme);
             GraphicsDevice device = Game1.graphics.GraphicsDevice;
 
             this.EnsureTexturesCreated(device);
 
+            // ==========================================
+            // MODE A: Only Album Art Widget
+            // ==========================================
+            if (this._config.OnlyAlbumArt)
+            {
+                int boxSize = (int)(76 * s);
+
+                // 1. Drop shadow
+                spriteBatch.Draw(
+                    this._boxBg76!,
+                    new Rectangle((int)(cardX + 3 * s), (int)(cardY + 5 * s), boxSize, boxSize),
+                    Color.Black * 0.45f
+                );
+
+                // 2. Box background
+                spriteBatch.Draw(
+                    this._boxBg76!,
+                    new Rectangle(cardX, cardY, boxSize, boxSize),
+                    colors.Background
+                );
+
+                // 3. Album Art
+                int artX = (int)(cardX + 6 * s);
+                int artY = (int)(cardY + 6 * s);
+                int artSize = (int)(64 * s);
+                Rectangle artRect = new Rectangle(artX, artY, artSize, artSize);
+
+                if (track.CoverArt != null && !track.CoverArt.IsDisposed)
+                {
+                    this.DrawRoundedArt(spriteBatch, track.CoverArt, artRect, radius: (int)Math.Max(2, 4 * s));
+                }
+                else
+                {
+                    spriteBatch.Draw(this._artBgTexture!, artRect, new Color(11, 23, 17));
+                    Vector2 center = new Vector2(artX + (22 * s), artY + (18 * s));
+                    float starScale = 1.2f * s;
+                    spriteBatch.DrawString(Game1.smallFont, "*", center + new Vector2(1, 1), Color.Black * 0.5f, 0f, Vector2.Zero, starScale, SpriteEffects.None, 1f);
+                    spriteBatch.DrawString(Game1.smallFont, "*", center, colors.BorderHighlight, 0f, Vector2.Zero, starScale, SpriteEffects.None, 1f);
+                }
+
+                // 4. Equalizer indicator overlay (bottom right)
+                if (track.IsPlaying)
+                {
+                    this._equalizer.Update(isPlaying: true);
+                    float[] bars = this._equalizer.GetBars();
+                    int eqBaseX = (int)(artX + artSize - (15 * s));
+                    int eqBaseY = (int)(artY + artSize - (4 * s));
+                    int barW = (int)Math.Max(1, 2 * s);
+                    int barGap = (int)Math.Max(2, 3 * s);
+
+                    Rectangle eqBg = new Rectangle(eqBaseX - (int)(2 * s), eqBaseY - (int)(12 * s), (int)(13 * s), (int)(14 * s));
+                    spriteBatch.Draw(Game1.staminaRect, eqBg, colors.Background * 0.85f);
+
+                    for (int i = 0; i < 3; i++)
+                    {
+                        int barH = Math.Max(2, (int)(bars[i] * 9f * s));
+                        Rectangle barRect = new Rectangle(eqBaseX + (i * barGap), eqBaseY - barH, barW, barH);
+                        spriteBatch.Draw(Game1.staminaRect, barRect, colors.ProgressFill);
+                    }
+                }
+
+                // 5. Border
+                spriteBatch.Draw(
+                    this._boxBorder76!,
+                    new Rectangle(cardX, cardY, boxSize, boxSize),
+                    colors.Border
+                );
+
+                if (colors.HasTopHighlight)
+                {
+                    spriteBatch.Draw(
+                        Game1.staminaRect,
+                        new Rectangle((int)(cardX + CORNER_RADIUS * s), cardY, (int)((76 - (CORNER_RADIUS * 2)) * s), (int)Math.Max(1, 2 * s)),
+                        colors.BorderHighlight
+                    );
+                }
+
+                return;
+            }
+
+            // ==========================================
+            // MODE B: Full HUD
+            // ==========================================
+            bool showArt = this._config.ShowAlbumArt;
+            int unscaledHeight = CARD_HEIGHT; // 82
+            if (!this._config.ShowPlaybackButtons && !this._config.ShowProgressBar)
+            {
+                unscaledHeight = 46;
+            }
+            else if (!this._config.ShowPlaybackButtons)
+            {
+                unscaledHeight = 56;
+            }
+
+            int cardW = (int)(CARD_WIDTH * s);
+            int cardH = (int)(unscaledHeight * s);
+
+            Texture2D bgTex = (unscaledHeight == 46) ? this._cardBg46! : (unscaledHeight == 56) ? this._cardBg56! : this._cardBg82!;
+            Texture2D borderTex = (unscaledHeight == 46) ? this._cardBorder46! : (unscaledHeight == 56) ? this._cardBorder56! : this._cardBorder82!;
+
             // 1. Drop Shadow (4px offset)
             spriteBatch.Draw(
-                this._cardBgTexture!,
+                bgTex,
                 new Rectangle((int)(cardX + 4 * s), (int)(cardY + 6 * s), cardW, cardH),
                 Color.Black * 0.45f
             );
 
             // 2. Card Background
             spriteBatch.Draw(
-                this._cardBgTexture!,
+                bgTex,
                 new Rectangle(cardX, cardY, cardW, cardH),
                 colors.Background
             );
 
             // Layout metrics
-            int colX = (int)(cardX + 82 * s);
-            int colW = (int)(228 * s);
+            int colX = (int)(cardX + (showArt ? 82 : 16) * s);
+            int colW = (int)((showArt ? 228 : 288) * s);
 
             var (font, titleScale, artistScale, timeScale) = this.GetFontAndScales(s);
 
@@ -258,11 +397,11 @@ namespace JunimoJams.UI
             string displayTitle = StringUtils.NormalizeForHud(track.Name);
             if (string.IsNullOrWhiteSpace(displayTitle)) displayTitle = "Not Running";
 
-            float titlePixelWidth = font.MeasureString(displayTitle).X * titleScale;
+            float titlePixelWidth = font.MeasureString(SanitizeForFont(displayTitle, font)).X * titleScale;
             float titleOffset = (this._config.EnableMarqueeText && titlePixelWidth > colW) ? this._marquee.TitleOffset : 0f;
 
             Vector2 titlePos = new Vector2(colX - titleOffset, cardY + (8 * s));
-            DrawBoundedString(spriteBatch, font, displayTitle, titlePos, titleScale, colors.Title, Color.Black * 0.85f, colX, colX + colW);
+            DrawBoundedString(spriteBatch, font, displayTitle, titlePos, titleScale, colors.Title, Color.Black * 0.85f);
 
             // Row 2: Equalizer + Artist (Left), Time (Right) (Y = cardY + 28 * s)
             string timeStr = "0:00 / 0:00";
@@ -272,26 +411,27 @@ namespace JunimoJams.UI
                 timeStr = $"{FormatTime(currentPos)} / {FormatTime(track.Duration)}";
             }
 
-            float timeWidth = font.MeasureString(timeStr).X * timeScale;
+            float timeWidth = font.MeasureString(SanitizeForFont(timeStr, font)).X * timeScale;
             Vector2 timePos = new Vector2(colX + colW - timeWidth, cardY + (28 * s));
 
             int artistX = colX + (track.IsPlaying ? (int)(13 * s) : 0);
             string displayArtist = StringUtils.NormalizeForHud(track.Artist);
             if (string.IsNullOrWhiteSpace(displayArtist)) displayArtist = "Music Player";
 
-            float artistPixelWidth = font.MeasureString(displayArtist).X * artistScale;
+            float artistPixelWidth = font.MeasureString(SanitizeForFont(displayArtist, font)).X * artistScale;
             int maxArtistWidth = Math.Max(30, (int)(timePos.X - artistX - (8 * s)));
             float artistOffset = (this._config.EnableMarqueeText && artistPixelWidth > maxArtistWidth) ? this._marquee.ArtistOffset : 0f;
 
             Vector2 artistPos = new Vector2(artistX - artistOffset, cardY + (28 * s));
-            DrawBoundedString(spriteBatch, font, displayArtist, artistPos, artistScale, colors.Artist, Color.Black * 0.7f, artistX, timePos.X - (8 * s));
+            DrawBoundedString(spriteBatch, font, displayArtist, artistPos, artistScale, colors.Artist, Color.Black * 0.7f);
 
-            // Clean Painter's Masks (ensure text never crosses into padding or other elements)
-            // Left margin mask (covers cardX to colX)
-            Rectangle leftMask = new Rectangle(cardX + (int)(2 * s), cardY + (int)(4 * s), (int)(80 * s), (int)(44 * s));
+            // Clean Painter's Masks
+            // Left margin mask
+            int leftMaskW = (int)((showArt ? 80 : 14) * s);
+            Rectangle leftMask = new Rectangle(cardX + (int)(2 * s), cardY + (int)(4 * s), leftMaskW, (int)(44 * s));
             spriteBatch.Draw(Game1.staminaRect, leftMask, colors.Background);
 
-            // Right margin mask (covers colX + colW to card edge)
+            // Right margin mask
             int rightPadX = colX + colW;
             Rectangle rightMask = new Rectangle(rightPadX, cardY + (int)(4 * s), (int)(cardW - (rightPadX - cardX)), (int)(44 * s));
             spriteBatch.Draw(Game1.staminaRect, rightMask, colors.Background);
@@ -301,9 +441,10 @@ namespace JunimoJams.UI
             Rectangle timeShield = new Rectangle(timeShieldX, cardY + (int)(24 * s), (int)(colX + colW - timeShieldX + 4), (int)(20 * s));
             spriteBatch.Draw(Game1.staminaRect, timeShield, colors.Background);
 
-            // Draw Time text (Right side, always crisp & visible)
-            spriteBatch.DrawString(font, timeStr, timePos + new Vector2(1, 1), Color.Black * 0.7f, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
-            spriteBatch.DrawString(font, timeStr, timePos, colors.Time, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
+            // Draw Time text
+            Vector2 snappedTimePos = new Vector2((float)Math.Round(timePos.X), (float)Math.Round(timePos.Y));
+            spriteBatch.DrawString(font, timeStr, snappedTimePos + new Vector2(1, 1), Color.Black * 0.7f, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
+            spriteBatch.DrawString(font, timeStr, snappedTimePos, colors.Time, 0f, Vector2.Zero, timeScale, SpriteEffects.None, 1f);
 
             // Equalizer (Left side of Row 2)
             if (track.IsPlaying)
@@ -324,47 +465,51 @@ namespace JunimoJams.UI
                 }
             }
 
-            // 3. Album Art Slot (drawn after text/left mask to guarantee zero bleeding)
-            int artX = (int)(cardX + 9 * s);
-            int artY = (int)(cardY + 9 * s);
-            int artSize = (int)(ART_SIZE * s);
-            Rectangle artRect = new Rectangle(artX, artY, artSize, artSize);
-
-            spriteBatch.Draw(this._artBgTexture!, artRect, new Color(11, 23, 17));
-
-            if (this._config.ShowAlbumArt && track.CoverArt != null && !track.CoverArt.IsDisposed)
+            // 3. Album Art Slot (ONLY IF showArt IS TRUE!)
+            if (showArt)
             {
-                this.DrawRoundedArt(spriteBatch, track.CoverArt, artRect, radius: (int)Math.Max(2, 4 * s));
-            }
-            else
-            {
-                Vector2 center = new Vector2(artX + (22 * s), artY + (18 * s));
-                float starScale = 1.2f * s;
-                spriteBatch.DrawString(Game1.smallFont, "*", center + new Vector2(1, 1), Color.Black * 0.5f, 0f, Vector2.Zero, starScale, SpriteEffects.None, 1f);
-                spriteBatch.DrawString(Game1.smallFont, "*", center, colors.BorderHighlight, 0f, Vector2.Zero, starScale, SpriteEffects.None, 1f);
-            }
+                int artX = (int)(cardX + 9 * s);
+                int artY = (int)(cardY + 9 * s);
+                int artSize = (int)(ART_SIZE * s);
+                Rectangle artRect = new Rectangle(artX, artY, artSize, artSize);
 
-            // Row 3: Slim Progress Bar
-            int barY = (int)(cardY + 47 * s);
-            int barHeight = (int)Math.Max(2, 4 * s);
-            Rectangle barTrackRect = new Rectangle(colX, barY, colW, barHeight);
-            spriteBatch.Draw(Game1.staminaRect, barTrackRect, colors.ProgressTrack);
+                spriteBatch.Draw(this._artBgTexture!, artRect, new Color(11, 23, 17));
 
-            // 1px bar border
-            DrawHollowRect(spriteBatch, barTrackRect, Color.White * 0.12f);
-
-            if (track.Duration > TimeSpan.Zero)
-            {
-                TimeSpan curPos = track.GetExtrapolatedPosition();
-                float ratio = Math.Clamp((float)(curPos.TotalSeconds / track.Duration.TotalSeconds), 0f, 1f);
-                int fillWidth = (int)(colW * ratio);
-                if (fillWidth > 0)
+                if (track.CoverArt != null && !track.CoverArt.IsDisposed)
                 {
-                    spriteBatch.Draw(Game1.staminaRect, new Rectangle(colX, barY, fillWidth, barHeight), colors.ProgressFill);
+                    this.DrawRoundedArt(spriteBatch, track.CoverArt, artRect, radius: (int)Math.Max(2, 4 * s));
+                }
+                else
+                {
+                    Vector2 center = new Vector2(artX + (22 * s), artY + (18 * s));
+                    float starScale = 1.2f * s;
+                    spriteBatch.DrawString(Game1.smallFont, "*", center + new Vector2(1, 1), Color.Black * 0.5f, 0f, Vector2.Zero, starScale, SpriteEffects.None, 1f);
+                    spriteBatch.DrawString(Game1.smallFont, "*", center, colors.BorderHighlight, 0f, Vector2.Zero, starScale, SpriteEffects.None, 1f);
                 }
             }
 
-            // Row 4: Centered Lucide Media Controls
+            // Row 3: Slim Progress Bar (ONLY IF ShowProgressBar IS TRUE!)
+            if (this._config.ShowProgressBar)
+            {
+                int barY = (int)(cardY + 47 * s);
+                int barHeight = (int)Math.Max(2, 4 * s);
+                Rectangle barTrackRect = new Rectangle(colX, barY, colW, barHeight);
+                spriteBatch.Draw(Game1.staminaRect, barTrackRect, colors.ProgressTrack);
+                DrawHollowRect(spriteBatch, barTrackRect, Color.White * 0.12f);
+
+                if (track.Duration > TimeSpan.Zero)
+                {
+                    TimeSpan curPos = track.GetExtrapolatedPosition();
+                    float ratio = Math.Clamp((float)(curPos.TotalSeconds / track.Duration.TotalSeconds), 0f, 1f);
+                    int fillWidth = (int)(colW * ratio);
+                    if (fillWidth > 0)
+                    {
+                        spriteBatch.Draw(Game1.staminaRect, new Rectangle(colX, barY, fillWidth, barHeight), colors.ProgressFill);
+                    }
+                }
+            }
+
+            // Row 4: Centered Lucide Media Controls (ONLY IF ShowPlaybackButtons IS TRUE!)
             if (this._config.ShowPlaybackButtons)
             {
                 float mouseX = Game1.getMouseX(ui_scale: true);
@@ -381,28 +526,27 @@ namespace JunimoJams.UI
                 Rectangle playRect = new Rectangle(centerX - (int)(8 * s), ctrlY, iconSize, iconSize);
                 Rectangle nextRect = new Rectangle(centerX + (int)(28 * s), ctrlY, iconSize, iconSize);
 
-                Rectangle prevHit = new Rectangle(82 + 114 - 44 - 4, 58 - 4, 24, 24);
-                Rectangle playHit = new Rectangle(82 + 114 - 8 - 4, 58 - 4, 24, 24);
-                Rectangle nextHit = new Rectangle(82 + 114 + 28 - 4, 58 - 4, 24, 24);
+                int unscaledColX = showArt ? 82 : 16;
+                int unscaledColW = showArt ? 228 : 288;
+                int unscaledCenterX = unscaledColX + (unscaledColW / 2);
+
+                Rectangle prevHit = new Rectangle(unscaledCenterX - 44 - 4, 58 - 4, 24, 24);
+                Rectangle playHit = new Rectangle(unscaledCenterX - 8 - 4, 58 - 4, 24, 24);
+                Rectangle nextHit = new Rectangle(unscaledCenterX + 28 - 4, 58 - 4, 24, 24);
 
                 Color prevCol = prevHit.Contains((int)unscaledX, (int)unscaledY) ? colors.IconHover : colors.IconNormal;
                 Color playCol = playHit.Contains((int)unscaledX, (int)unscaledY) ? colors.IconHover : colors.IconNormal;
                 Color nextCol = nextHit.Contains((int)unscaledX, (int)unscaledY) ? colors.IconHover : colors.IconNormal;
 
-                // Prev (glyph 0: 0..15)
                 spriteBatch.Draw(this._mediaIconsTexture!, prevRect, new Rectangle(0, 0, 16, 16), prevCol);
-
-                // Play / Pause (glyph 1: 16..31 Play, glyph 2: 32..47 Pause)
-                int playSrcX = track.IsPlaying ? 32 : 16;
-                spriteBatch.Draw(this._mediaIconsTexture!, playRect, new Rectangle(playSrcX, 0, 16, 16), playCol);
-
-                // Next (glyph 3: 48..63)
+                int playIconSrcX = track.IsPlaying ? 32 : 16;
+                spriteBatch.Draw(this._mediaIconsTexture!, playRect, new Rectangle(playIconSrcX, 0, 16, 16), playCol);
                 spriteBatch.Draw(this._mediaIconsTexture!, nextRect, new Rectangle(48, 0, 16, 16), nextCol);
             }
 
-            // 5. Card Border & Top Highlight (drawn on top of all content to frame perfectly)
+            // 5. Card Border & Top Highlight
             spriteBatch.Draw(
-                this._cardBorderTexture!,
+                borderTex,
                 new Rectangle(cardX, cardY, cardW, cardH),
                 colors.Border
             );
@@ -425,37 +569,17 @@ namespace JunimoJams.UI
             sb.Draw(Game1.staminaRect, new Rectangle(r.Right - 1, r.Y, 1, r.Height), color);
         }
 
-        private static void DrawBoundedString(SpriteBatch sb, SpriteFont font, string text, Vector2 pos, float scale, Color color, Color shadowColor, float minX, float maxX)
+        private static void DrawBoundedString(SpriteBatch sb, SpriteFont font, string text, Vector2 pos, float scale, Color color, Color shadowColor)
         {
             if (string.IsNullOrEmpty(text))
                 return;
 
-            float curX = pos.X;
-            float y = pos.Y;
-            for (int i = 0; i < text.Length; i++)
-            {
-                char c = text[i];
-                string ch = (c < 128) ? AsciiStrings[c] : c.ToString();
+            string safeText = SanitizeForFont(text, font);
+            Vector2 snappedPos = new Vector2((float)Math.Round(pos.X), (float)Math.Round(pos.Y));
+            Vector2 shadowOffset = new Vector2(1, 1);
 
-                if (!font.Characters.Contains(c) && font.DefaultCharacter == null)
-                {
-                    ch = " ";
-                }
-
-                float w = font.MeasureString(ch).X * scale;
-
-                // Character visible if its horizontal span overlaps [minX, maxX]
-                if (curX + w > minX && curX < maxX)
-                {
-                    Vector2 p = new Vector2(curX, y);
-                    sb.DrawString(font, ch, p + new Vector2(1, 1), shadowColor, 0f, Vector2.Zero, scale, SpriteEffects.None, 1f);
-                    sb.DrawString(font, ch, p, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 1f);
-                }
-
-                curX += w;
-                if (curX >= maxX + 30f)
-                    break;
-            }
+            sb.DrawString(font, safeText, snappedPos + shadowOffset, shadowColor, 0f, Vector2.Zero, scale, SpriteEffects.None, 1f);
+            sb.DrawString(font, safeText, snappedPos, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 1f);
         }
 
         public static HudThemeColors GetThemeColors(string themeName)
@@ -614,25 +738,20 @@ namespace JunimoJams.UI
 
         private void EnsureTexturesCreated(GraphicsDevice device)
         {
-            if (this._cardBgTexture == null || this._cardBgTexture.IsDisposed)
-            {
-                this._cardBgTexture = CreateRoundedCardTexture(device, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
-            }
+            this._cardBg82 ??= CreateRoundedCardTexture(device, CARD_WIDTH, 82, CORNER_RADIUS);
+            this._cardBorder82 ??= CreateRoundedBorderTexture(device, CARD_WIDTH, 82, CORNER_RADIUS, BORDER_WIDTH);
 
-            if (this._cardBorderTexture == null || this._cardBorderTexture.IsDisposed)
-            {
-                this._cardBorderTexture = CreateRoundedBorderTexture(device, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS, BORDER_WIDTH);
-            }
+            this._cardBg56 ??= CreateRoundedCardTexture(device, CARD_WIDTH, 56, CORNER_RADIUS);
+            this._cardBorder56 ??= CreateRoundedBorderTexture(device, CARD_WIDTH, 56, CORNER_RADIUS, BORDER_WIDTH);
 
-            if (this._artBgTexture == null || this._artBgTexture.IsDisposed)
-            {
-                this._artBgTexture = CreateRoundedCardTexture(device, ART_SIZE, ART_SIZE, r: 4);
-            }
+            this._cardBg46 ??= CreateRoundedCardTexture(device, CARD_WIDTH, 46, CORNER_RADIUS);
+            this._cardBorder46 ??= CreateRoundedBorderTexture(device, CARD_WIDTH, 46, CORNER_RADIUS, BORDER_WIDTH);
 
-            if (this._mediaIconsTexture == null || this._mediaIconsTexture.IsDisposed)
-            {
-                this._mediaIconsTexture = CreateMediaIconsAtlas(device);
-            }
+            this._boxBg76 ??= CreateRoundedCardTexture(device, 76, 76, CORNER_RADIUS);
+            this._boxBorder76 ??= CreateRoundedBorderTexture(device, 76, 76, CORNER_RADIUS, BORDER_WIDTH);
+
+            this._artBgTexture ??= CreateRoundedCardTexture(device, ART_SIZE, ART_SIZE, r: 4);
+            this._mediaIconsTexture ??= CreateMediaIconsAtlas(device);
         }
 
         private static Texture2D CreateRoundedCardTexture(GraphicsDevice device, int w, int h, int r)
@@ -876,11 +995,25 @@ namespace JunimoJams.UI
 
         public void Dispose()
         {
-            this._cardBgTexture?.Dispose();
-            this._cardBgTexture = null;
+            this._cardBg82?.Dispose();
+            this._cardBg82 = null;
+            this._cardBorder82?.Dispose();
+            this._cardBorder82 = null;
 
-            this._cardBorderTexture?.Dispose();
-            this._cardBorderTexture = null;
+            this._cardBg56?.Dispose();
+            this._cardBg56 = null;
+            this._cardBorder56?.Dispose();
+            this._cardBorder56 = null;
+
+            this._cardBg46?.Dispose();
+            this._cardBg46 = null;
+            this._cardBorder46?.Dispose();
+            this._cardBorder46 = null;
+
+            this._boxBg76?.Dispose();
+            this._boxBg76 = null;
+            this._boxBorder76?.Dispose();
+            this._boxBorder76 = null;
 
             this._artBgTexture?.Dispose();
             this._artBgTexture = null;
